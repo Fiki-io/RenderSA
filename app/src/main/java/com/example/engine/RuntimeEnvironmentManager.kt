@@ -6,6 +6,7 @@ import android.system.Os
 import android.util.Log
 import androidx.documentfile.provider.DocumentFile
 import com.example.core.AppConstants
+import com.example.diagnostic.UniversalCrashLogger
 import com.example.util.StoragePathResolver
 import com.winlator.core.DefaultVersion
 import com.winlator.core.EnvVars
