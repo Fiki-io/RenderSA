@@ -45,6 +45,7 @@ typedef struct ConnectedClient {
     bool running;
     jobject tag;
     JMethods jmethods;
+    pthread_mutex_t mutex;
 } ConnectedClient;
 
 static JNIEnv* getThreadEnv(JavaVM* jvm) {
@@ -196,7 +197,12 @@ error:
 
 static void XConnectorEpoll_killConnection(XConnectorEpoll* connector, ConnectedClient* client) {
     if (!connector || !client) return;
+
+    pthread_mutex_lock(&client->mutex);
     client->running = false;
+    jobject tagToShutdown = client->tag;
+    client->tag = NULL;
+    pthread_mutex_unlock(&client->mutex);
 
     if (connector->multithreadedClients) {
         if (pthread_self() != client->pollThread) {
@@ -214,17 +220,14 @@ static void XConnectorEpoll_killConnection(XConnectorEpoll* connector, Connected
 
     CLOSEFD(client->fd);
 
-    if (client->tag) {
-        jobject tag = client->tag;
-        client->tag = NULL;
-
+    if (tagToShutdown) {
         JNIEnv* env = getThreadEnv(connector->jmethods.jvm);
         if (env && connector->jmethods.obj && connector->jmethods.handleConnectionShutdown) {
-            (*env)->CallVoidMethod(env, connector->jmethods.obj, connector->jmethods.handleConnectionShutdown, tag);
+            (*env)->CallVoidMethod(env, connector->jmethods.obj, connector->jmethods.handleConnectionShutdown, tagToShutdown);
             checkAndClearException(env, "killConnection handleConnectionShutdown");
         }
         if (env) {
-            (*env)->DeleteGlobalRef(env, tag);
+            (*env)->DeleteGlobalRef(env, tagToShutdown);
         }
     }
 }
@@ -241,7 +244,9 @@ static void* pollThread(void* param) {
         jobject localTag = (*env)->CallObjectMethod(env, jmethods->obj, jmethods->handleNewConnection, (jlong)client, client->fd);
         checkAndClearException(env, "pollThread handleNewConnection");
         if (localTag) {
+            pthread_mutex_lock(&client->mutex);
             client->tag = (*env)->NewGlobalRef(env, localTag);
+            pthread_mutex_unlock(&client->mutex);
             (*env)->DeleteLocalRef(env, localTag);
         }
     }
@@ -249,26 +254,34 @@ static void* pollThread(void* param) {
     int res;
     do {
         res = waitForSocketRead(client->fd, client->shutdownFd);
-        if (res == 1 && client->running && client->tag) {
+        pthread_mutex_lock(&client->mutex);
+        bool shouldProcess = (res == 1 && client->running && client->tag != NULL);
+        jobject currentTag = client->tag;
+        pthread_mutex_unlock(&client->mutex);
+
+        if (shouldProcess && currentTag) {
             env = getThreadEnv(jmethods->jvm);
             if (env && jmethods->obj && jmethods->handleExistingConnection) {
-                (*env)->CallVoidMethod(env, jmethods->obj, jmethods->handleExistingConnection, client->tag);
+                (*env)->CallVoidMethod(env, jmethods->obj, jmethods->handleExistingConnection, currentTag);
                 checkAndClearException(env, "pollThread handleExistingConnection");
             }
         }
     }
     while (client->running && res >= 0);
 
+    pthread_mutex_lock(&client->mutex);
+    jobject tagToShutdown = client->tag;
+    client->tag = NULL;
+    pthread_mutex_unlock(&client->mutex);
+
     env = getThreadEnv(jmethods->jvm);
-    if (client->tag) {
-        jobject tag = client->tag;
-        client->tag = NULL;
+    if (tagToShutdown) {
         if (env && jmethods->obj && jmethods->handleConnectionShutdown) {
-            (*env)->CallVoidMethod(env, jmethods->obj, jmethods->handleConnectionShutdown, tag);
+            (*env)->CallVoidMethod(env, jmethods->obj, jmethods->handleConnectionShutdown, tagToShutdown);
             checkAndClearException(env, "pollThread handleConnectionShutdown");
         }
         if (env) {
-            (*env)->DeleteGlobalRef(env, tag);
+            (*env)->DeleteGlobalRef(env, tagToShutdown);
         }
     }
 
@@ -294,6 +307,7 @@ static void XConnectorEpoll_handleNewConnection(XConnectorEpoll* connector, int 
         close(clientFd);
         return;
     }
+    pthread_mutex_init(&client->mutex, NULL);
     client->fd = clientFd;
     client->running = true;
 
@@ -311,7 +325,9 @@ static void XConnectorEpoll_handleNewConnection(XConnectorEpoll* connector, int 
             jobject localTag = (*env)->CallObjectMethod(env, jmethods->obj, jmethods->handleNewConnection, (jlong)client, clientFd);
             checkAndClearException(env, "handleNewConnection CallObjectMethod");
             if (localTag) {
+                pthread_mutex_lock(&client->mutex);
                 client->tag = (*env)->NewGlobalRef(env, localTag);
+                pthread_mutex_unlock(&client->mutex);
                 (*env)->DeleteLocalRef(env, localTag);
             }
         }

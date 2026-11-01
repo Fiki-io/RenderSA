@@ -114,6 +114,7 @@ public class DRI3Extension extends Extension {
         else content = window.getContent();
 
         GPUImage texture = GPUImage.createOrObtain(xServer, content, false, true);
+        if (texture == null) throw new BadPixmap(windowId);
         short stride = texture.getStride();
         int nativeHandle = texture.getNativeHandle();
 
@@ -131,7 +132,9 @@ public class DRI3Extension extends Extension {
             outputStream.writeByte((byte)32);
             outputStream.writeByte((byte)32);
             outputStream.writePad(12);
-            outputStream.setAncillaryFd(nativeHandle);
+            if (nativeHandle > 0) {
+                outputStream.setAncillaryFd(nativeHandle);
+            }
         }
     }
 

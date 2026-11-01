@@ -373,11 +373,15 @@ class RenderSADisplayActivity : ComponentActivity(), XSessionHost {
                             "Jendela X11 dipetakan: id=${window.id} (${window.width}x${window.height}) name=[$winName] class=[$winClass]"
                         )
                         lifecycleScope.launch(Dispatchers.IO) {
-                            if (cpuAffinityEnabled && cpuTopology.totalCores > 1) {
-                                NativeBridge.nativeOptimizeRunningGameProcesses(
-                                    cpuTopology.pCoreMask,
-                                    cpuTopology.eCoreMask
-                                )
+                            try {
+                                if (cpuAffinityEnabled && cpuTopology.totalCores > 1) {
+                                    NativeBridge.nativeOptimizeRunningGameProcesses(
+                                        cpuTopology.pCoreMask,
+                                        cpuTopology.eCoreMask
+                                    )
+                                }
+                            } catch (t: Throwable) {
+                                android.util.Log.e("RenderSADisplayActivity", "Gagal optimasi CPU affinity pada onMapWindow", t)
                             }
                         }
                     }

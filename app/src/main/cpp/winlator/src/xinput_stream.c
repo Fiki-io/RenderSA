@@ -124,12 +124,14 @@ Java_com_winlator_xconnector_XInputStream_nativeAllocate(JNIEnv *env, jobject ob
 JNIEXPORT jbyte JNICALL
 Java_com_winlator_xconnector_XInputStream_readByte(jlong nativePtr) {
     XInputStream* inputStream = (XInputStream*)nativePtr;
+    if (!inputStream) return 0;
     return *(jbyte*)(inputStream->activeBuffer.data + inputStream->activeBuffer.position++);
 }
 
 JNIEXPORT jshort JNICALL
 Java_com_winlator_xconnector_XInputStream_readShort(jlong nativePtr) {
     XInputStream* inputStream = (XInputStream*)nativePtr;
+    if (!inputStream) return 0;
     jshort value = *(jshort*)(inputStream->activeBuffer.data + inputStream->activeBuffer.position);
     inputStream->activeBuffer.position += 2;
     return value;
@@ -138,6 +140,7 @@ Java_com_winlator_xconnector_XInputStream_readShort(jlong nativePtr) {
 JNIEXPORT jint JNICALL
 Java_com_winlator_xconnector_XInputStream_readInt(jlong nativePtr) {
     XInputStream* inputStream = (XInputStream*)nativePtr;
+    if (!inputStream) return 0;
     jint value = *(jint*)(inputStream->activeBuffer.data + inputStream->activeBuffer.position);
     inputStream->activeBuffer.position += 4;
     return value;
@@ -146,6 +149,7 @@ Java_com_winlator_xconnector_XInputStream_readInt(jlong nativePtr) {
 JNIEXPORT jlong JNICALL
 Java_com_winlator_xconnector_XInputStream_readLong(jlong nativePtr) {
     XInputStream* inputStream = (XInputStream*)nativePtr;
+    if (!inputStream) return 0;
     jlong value = *(jlong*)(inputStream->activeBuffer.data + inputStream->activeBuffer.position);
     inputStream->activeBuffer.position += 8;
     return value;
@@ -153,6 +157,7 @@ Java_com_winlator_xconnector_XInputStream_readLong(jlong nativePtr) {
 
 JNIEXPORT void JNICALL
 Java_com_winlator_xconnector_XInputStream_skip(jlong nativePtr, jint length) {
+    if (!nativePtr) return;
     ((XInputStream*)nativePtr)->activeBuffer.position += length;
 }
 
@@ -160,6 +165,7 @@ JNIEXPORT jobject JNICALL
 Java_com_winlator_xconnector_XInputStream_readByteBuffer(JNIEnv *env, jobject obj,
                                                          jlong nativePtr, jint length) {
     XInputStream* inputStream = (XInputStream*)nativePtr;
+    if (!inputStream || length <= 0) return NULL;
     jobject byteBuffer = (*env)->NewDirectByteBuffer(env, inputStream->activeBuffer.data + inputStream->activeBuffer.position, length);
     inputStream->activeBuffer.position += length;
     return byteBuffer;
@@ -168,27 +174,32 @@ Java_com_winlator_xconnector_XInputStream_readByteBuffer(JNIEnv *env, jobject ob
 JNIEXPORT jint JNICALL
 Java_com_winlator_xconnector_XInputStream_available(jlong nativePtr) {
     XInputStream* inputStream = (XInputStream*)nativePtr;
+    if (!inputStream) return 0;
     return inputStream->activeBuffer.limit - inputStream->activeBuffer.position;
 }
 
 JNIEXPORT jint JNICALL
 Java_com_winlator_xconnector_XInputStream_readMoreData(jlong nativePtr, jboolean canReceiveAncillaryMessages) {
+    if (!nativePtr) return -1;
     return XInputStream_readMoreData((XInputStream*)nativePtr, canReceiveAncillaryMessages);
 }
 
 JNIEXPORT jint JNICALL
 Java_com_winlator_xconnector_XInputStream_getActivePosition(jlong nativePtr) {
+    if (!nativePtr) return 0;
     return ((XInputStream*)nativePtr)->activeBuffer.position;
 }
 
 JNIEXPORT void JNICALL
 Java_com_winlator_xconnector_XInputStream_setActivePosition(jlong nativePtr, jint activePosition) {
+    if (!nativePtr) return;
     ((XInputStream*)nativePtr)->activeBuffer.position = activePosition;
 }
 
 JNIEXPORT jint JNICALL
 Java_com_winlator_xconnector_XInputStream_getAncillaryFd(jlong nativePtr) {
     XInputStream* inputStream = (XInputStream*)nativePtr;
+    if (!inputStream) return -1;
     return inputStream->ancillaryFds.size > 0 ? IntArray_removeAt(&inputStream->ancillaryFds, 0) : -1;
 }
 

@@ -18,10 +18,12 @@ typedef struct XOutputStream {
 } XOutputStream;
 
 static void ensureSpaceIsAvailable(XOutputStream* outputStream, int length) {
+    if (!outputStream || length <= 0) return;
     if ((outputStream->buffer.capacity - outputStream->buffer.position) >= length) return;
 
     int newCapacity = outputStream->buffer.capacity + length;
     void* newData = realloc(outputStream->buffer.data, newCapacity);
+    if (!newData) return;
     outputStream->buffer.capacity = newCapacity;
     outputStream->buffer.limit = newCapacity;
     outputStream->buffer.data = newData;
@@ -29,6 +31,7 @@ static void ensureSpaceIsAvailable(XOutputStream* outputStream, int length) {
 
 static XOutputStream* XOutputStream_allocate(int fd, int initialCapacity) {
     XOutputStream* outputStream = calloc(1, sizeof(XOutputStream));
+    if (!outputStream) return NULL;
     outputStream->fd = fd;
     outputStream->buffer.data = calloc(initialCapacity, 1);
     outputStream->buffer.capacity = initialCapacity;
@@ -43,6 +46,7 @@ static void XOutputStream_destroy(XOutputStream* outputStream) {
 }
 
 static jboolean XOutputStream_send(XOutputStream* outputStream) {
+    if (!outputStream) return JNI_FALSE;
     if (outputStream->buffer.position == 0) return JNI_TRUE;
     outputStream->buffer.limit = outputStream->buffer.position;
     outputStream->buffer.position = 0;
@@ -67,12 +71,14 @@ Java_com_winlator_xconnector_XOutputStream_nativeAllocate(JNIEnv *env, jobject o
 
 JNIEXPORT void JNICALL
 Java_com_winlator_xconnector_XOutputStream_setAncillaryFd(jlong nativePtr, jint ancillaryFd) {
+    if (!nativePtr) return;
     ((XOutputStream*)nativePtr)->ancillaryFd = ancillaryFd;
 }
 
 JNIEXPORT void JNICALL
 Java_com_winlator_xconnector_XOutputStream_writeByte(jlong nativePtr, jbyte value) {
     XOutputStream* outputStream = (XOutputStream*)nativePtr;
+    if (!outputStream) return;
     ensureSpaceIsAvailable(outputStream, 1);
     *(jbyte*)(outputStream->buffer.data + outputStream->buffer.position++) = value;
 }
@@ -80,6 +86,7 @@ Java_com_winlator_xconnector_XOutputStream_writeByte(jlong nativePtr, jbyte valu
 JNIEXPORT void JNICALL
 Java_com_winlator_xconnector_XOutputStream_writeShort(jlong nativePtr, jshort value) {
     XOutputStream* outputStream = (XOutputStream*)nativePtr;
+    if (!outputStream) return;
     ensureSpaceIsAvailable(outputStream, 2);
     *(jshort*)(outputStream->buffer.data + outputStream->buffer.position) = value;
     outputStream->buffer.position += 2;
@@ -88,6 +95,7 @@ Java_com_winlator_xconnector_XOutputStream_writeShort(jlong nativePtr, jshort va
 JNIEXPORT void JNICALL
 Java_com_winlator_xconnector_XOutputStream_writeInt(jlong nativePtr, jint value) {
     XOutputStream* outputStream = (XOutputStream*)nativePtr;
+    if (!outputStream) return;
     ensureSpaceIsAvailable(outputStream, 4);
     *(jint*)(outputStream->buffer.data + outputStream->buffer.position) = value;
     outputStream->buffer.position += 4;
@@ -96,6 +104,7 @@ Java_com_winlator_xconnector_XOutputStream_writeInt(jlong nativePtr, jint value)
 JNIEXPORT void JNICALL
 Java_com_winlator_xconnector_XOutputStream_writeLong(jlong nativePtr, jlong value) {
     XOutputStream* outputStream = (XOutputStream*)nativePtr;
+    if (!outputStream) return;
     ensureSpaceIsAvailable(outputStream, 8);
     *(jlong*)(outputStream->buffer.data + outputStream->buffer.position) = value;
     outputStream->buffer.position += 8;
@@ -104,6 +113,7 @@ Java_com_winlator_xconnector_XOutputStream_writeLong(jlong nativePtr, jlong valu
 JNIEXPORT void JNICALL
 Java_com_winlator_xconnector_XOutputStream_writePad(jlong nativePtr, jint length) {
     XOutputStream* outputStream = (XOutputStream*)nativePtr;
+    if (!outputStream || length <= 0) return;
     ensureSpaceIsAvailable(outputStream, length);
     memset(outputStream->buffer.data + outputStream->buffer.position, 0, length);
     outputStream->buffer.position += length;
@@ -113,9 +123,13 @@ JNIEXPORT void JNICALL
 Java_com_winlator_xconnector_XOutputStream_writeAt(JNIEnv *env, jclass obj,
                                                    jlong nativePtr, jint position, jbyteArray data) {
     XOutputStream* outputStream = (XOutputStream*)nativePtr;
+    if (!outputStream || !data) return;
     jbyte* dataPtr = (*env)->GetByteArrayElements(env, data, 0);
+    if (!dataPtr) return;
     jsize length = (*env)->GetArrayLength(env, data);
-    memcpy(outputStream->buffer.data + position, dataPtr, length);
+    if (position >= 0 && (position + length) <= outputStream->buffer.capacity) {
+        memcpy(outputStream->buffer.data + position, dataPtr, length);
+    }
     (*env)->ReleaseByteArrayElements(env, data, dataPtr, JNI_ABORT);
 }
 
@@ -124,7 +138,9 @@ Java_com_winlator_xconnector_XOutputStream_writeByteBuffer(JNIEnv *env, jclass o
                                                            jlong nativePtr, jobject data,
                                                            jint offset, jint length) {
     XOutputStream* outputStream = (XOutputStream*)nativePtr;
+    if (!outputStream || !data || length <= 0) return;
     void* dataAddr = (*env)->GetDirectBufferAddress(env, data);
+    if (!dataAddr) return;
     ensureSpaceIsAvailable(outputStream, length);
     memcpy(outputStream->buffer.data + outputStream->buffer.position, dataAddr + offset, length);
     outputStream->buffer.position += length;
@@ -143,5 +159,5 @@ Java_com_winlator_xconnector_XOutputStream_destroy(jlong nativePtr) {
 JNIEXPORT jint JNICALL
 Java_com_winlator_xconnector_XOutputStream_length(jlong nativePtr) {
     XOutputStream* outputStream = (XOutputStream*)nativePtr;
-    return outputStream->buffer.position;
+    return outputStream ? outputStream->buffer.position : 0;
 }

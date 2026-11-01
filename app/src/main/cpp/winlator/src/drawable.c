@@ -75,8 +75,10 @@ JNIEXPORT void JNICALL
 Java_com_winlator_xserver_Drawable_drawBitmap(JNIEnv *env, jclass obj,
                                               jshort width, jshort height, jobject srcData,
                                               jobject dstData) {
+    if (!srcData || !dstData || width <= 0 || height <= 0) return;
     uint8_t *srcDataAddr = (*env)->GetDirectBufferAddress(env, srcData);
     int *dstDataAddr = (*env)->GetDirectBufferAddress(env, dstData);
+    if (!srcDataAddr || !dstDataAddr) return;
 
     int stride = getBitmapBytePad(width);
     for (int16_t y = 0, x; y < height; y++) {
@@ -91,8 +93,10 @@ Java_com_winlator_xserver_Drawable_copyArea(JNIEnv *env, jclass obj, jshort srcX
                                             jshort width, jshort height, jshort srcStride,
                                             jshort dstStride, jobject srcData,
                                             jobject dstData) {
+    if (!srcData || !dstData || width <= 0 || height <= 0) return;
     uint8_t *srcDataAddr = (*env)->GetDirectBufferAddress(env, srcData);
     uint8_t *dstDataAddr = (*env)->GetDirectBufferAddress(env, dstData);
+    if (!srcDataAddr || !dstDataAddr) return;
 
     srcDataAddr += (srcX + srcY * srcStride) * 4;
     dstDataAddr += (dstX + dstY * dstStride) * 4;
@@ -119,16 +123,17 @@ Java_com_winlator_xserver_Drawable_copyAreaOp(JNIEnv *env, jclass obj, jshort sr
                                               jshort width, jshort height, jshort srcStride,
                                               jshort dstStride, jobject srcData,
                                               jobject dstData, int gcFunction) {
-    int i, j, srcColor, dstColor;
+    if (!srcData || !dstData || width <= 0 || height <= 0) return;
     uint8_t *srcDataAddr = (*env)->GetDirectBufferAddress(env, srcData);
     uint8_t *dstDataAddr = (*env)->GetDirectBufferAddress(env, dstData);
+    if (!srcDataAddr || !dstDataAddr) return;
 
     for (int16_t x, y = 0; y < height; y++) {
         for (x = 0; x < width; x++) {
-            i = (x + srcX + (y + srcY) * srcStride) * 4;
-            j = (x + dstX + (y + dstY) * dstStride) * 4;
-            srcColor = (srcDataAddr[i+0] << 16) | (srcDataAddr[i+1] << 8) | srcDataAddr[i+2];
-            dstColor = (dstDataAddr[j+0] << 16) | (dstDataAddr[j+1] << 8) | dstDataAddr[j+2];
+            int i = (x + srcX + (y + srcY) * srcStride) * 4;
+            int j = (x + dstX + (y + dstY) * dstStride) * 4;
+            int srcColor = (srcDataAddr[i+0] << 16) | (srcDataAddr[i+1] << 8) | srcDataAddr[i+2];
+            int dstColor = (dstDataAddr[j+0] << 16) | (dstDataAddr[j+1] << 8) | dstDataAddr[j+2];
 
             dstColor = setPixelOp(srcColor, dstColor, gcFunction);
 
@@ -205,9 +210,11 @@ Java_com_winlator_xserver_Drawable_drawAlphaMaskedBitmap(JNIEnv *env, jclass obj
                                                          jbyte backGreen, jbyte backBlue,
                                                          jobject srcData, jobject maskData,
                                                          jobject dstData) {
+    if (!srcData || !maskData || !dstData) return;
     int *srcDataAddr = (*env)->GetDirectBufferAddress(env, srcData);
     int *maskDataAddr = (*env)->GetDirectBufferAddress(env, maskData);
     int *dstDataAddr = (*env)->GetDirectBufferAddress(env, dstData);
+    if (!srcDataAddr || !maskDataAddr || !dstDataAddr) return;
 
     int foreColor = packColor(foreRed, foreGreen, foreBlue);
     int backColor = packColor(backRed, backGreen, backBlue);
@@ -221,6 +228,7 @@ Java_com_winlator_xserver_Drawable_drawAlphaMaskedBitmap(JNIEnv *env, jclass obj
 JNIEXPORT void JNICALL
 Java_com_winlator_xserver_Drawable_fromBitmap(JNIEnv *env, jclass obj, jobject bitmap,
                                               jobject data) {
+    if (!bitmap || !data) return;
     char *dataAddr = (*env)->GetDirectBufferAddress(env, data);
     if (!dataAddr) return;
 
@@ -239,14 +247,16 @@ Java_com_winlator_xserver_Drawable_fromBitmap(JNIEnv *env, jclass obj, jobject b
 JNIEXPORT void JNICALL
 Java_com_winlator_xserver_Pixmap_toBitmap(JNIEnv *env, jclass obj, jobject colorData,
                                           jobject maskData, jobject bitmap) {
+    if (!colorData || !bitmap) return;
     char *colorDataAddr = (*env)->GetDirectBufferAddress(env, colorData);
     char *maskDataAddr = maskData ? (*env)->GetDirectBufferAddress(env, maskData) : NULL;
+    if (!colorDataAddr) return;
 
     AndroidBitmapInfo info;
-    uint8_t *pixels;
+    uint8_t *pixels = NULL;
 
-    AndroidBitmap_getInfo(env, bitmap, &info);
-    AndroidBitmap_lockPixels(env, bitmap, (void**)&pixels);
+    if (AndroidBitmap_getInfo(env, bitmap, &info) < 0) return;
+    if (AndroidBitmap_lockPixels(env, bitmap, (void**)&pixels) < 0 || !pixels) return;
 
     for (int i = 0, size = info.width * info.height * 4; i < size; i += 4) {
         pixels[i+2] = colorDataAddr[i+0];

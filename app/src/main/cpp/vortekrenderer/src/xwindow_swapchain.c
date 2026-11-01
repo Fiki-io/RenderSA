@@ -2,16 +2,28 @@
 #include "vulkan_helper.h"
 
 void getWindowExtent(JMethods* jmethods, int windowId, VkExtent2D* extent) {
+    if (!extent) return;
+    extent->width = 0;
+    extent->height = 0;
+    if (!jmethods || !jmethods->env || !jmethods->obj || !jmethods->getWindowWidth || !jmethods->getWindowHeight) {
+        return;
+    }
     extent->width = (*jmethods->env)->CallIntMethod(jmethods->env, jmethods->obj, jmethods->getWindowWidth, windowId);
     extent->height = (*jmethods->env)->CallIntMethod(jmethods->env, jmethods->obj, jmethods->getWindowHeight, windowId);
 }
 
 static AHardwareBuffer* getWindowHardwareBuffer(JMethods* jmethods, int windowId, jboolean useHALPixelFormatBGRA8888) {
+    if (!jmethods || !jmethods->env || !jmethods->obj || !jmethods->getWindowHardwareBuffer) return NULL;
     jlong hardwareBufferPtr = (*jmethods->env)->CallLongMethod(jmethods->env, jmethods->obj, jmethods->getWindowHardwareBuffer, windowId, useHALPixelFormatBGRA8888);
     return (AHardwareBuffer*)hardwareBufferPtr;
 }
 
 static VkResult createImageMemory(VkDevice device, VkImage image, AHardwareBuffer* hardwareBuffer, VkDeviceMemory* pMemory) {
+    if (!device || !image || !hardwareBuffer || !pMemory) return VK_ERROR_INITIALIZATION_FAILED;
+    if (!vulkanWrapper.vkGetAndroidHardwareBufferPropertiesANDROID || !vulkanWrapper.vkAllocateMemory || !vulkanWrapper.vkBindImageMemory) {
+        return VK_ERROR_INITIALIZATION_FAILED;
+    }
+
     VkAndroidHardwareBufferPropertiesANDROID ahbProperties = {0};
     ahbProperties.sType = VK_STRUCTURE_TYPE_ANDROID_HARDWARE_BUFFER_PROPERTIES_ANDROID;
     vulkanWrapper.vkGetAndroidHardwareBufferPropertiesANDROID(device, hardwareBuffer, &ahbProperties);
@@ -37,18 +49,27 @@ static VkResult createImageMemory(VkDevice device, VkImage image, AHardwareBuffe
     if (result != VK_SUCCESS) return result;
 
     result = vulkanWrapper.vkBindImageMemory(device, image, memory, 0);
-    if (result != VK_SUCCESS) return result;
+    if (result != VK_SUCCESS) {
+        if (vulkanWrapper.vkFreeMemory) {
+            vulkanWrapper.vkFreeMemory(device, memory, NULL);
+        }
+        return result;
+    }
 
     *pMemory = memory;
     return VK_SUCCESS;
 }
 
 static VkResult createImage(VkDevice device, XWindowSwapchain* swapchain, XWindowSwapchain_Image* swapchainImage) {
+    if (!device || !swapchain || !swapchainImage || !swapchain->jmethods) return VK_ERROR_INITIALIZATION_FAILED;
+
     jboolean useHALPixelFormatBGRA8888 = swapchain->imageFormat == VK_FORMAT_B8G8R8A8_UNORM || swapchain->imageFormat == VK_FORMAT_B8G8R8A8_SRGB;
     AHardwareBuffer* hardwareBuffer = getWindowHardwareBuffer(swapchain->jmethods, swapchain->windowId, useHALPixelFormatBGRA8888);
+    if (!hardwareBuffer) return VK_ERROR_INITIALIZATION_FAILED;
 
     AHardwareBuffer_Desc ahbDesc = {0};
     AHardwareBuffer_describe(hardwareBuffer, &ahbDesc);
+    if (ahbDesc.width == 0 || ahbDesc.height == 0) return VK_ERROR_INITIALIZATION_FAILED;
 
     VkExternalFormatANDROID externalFormatAndroid = {0};
     externalFormatAndroid.sType = VK_STRUCTURE_TYPE_EXTERNAL_FORMAT_ANDROID;
@@ -80,11 +101,17 @@ static VkResult createImage(VkDevice device, XWindowSwapchain* swapchain, XWindo
     VkDeviceMemory memory;
     VkResult result;
 
+    if (!vulkanWrapper.vkCreateImage) return VK_ERROR_INITIALIZATION_FAILED;
     result = vulkanWrapper.vkCreateImage(device, &imageInfo, NULL, &image);
     if (result != VK_SUCCESS) return result;
 
     result = createImageMemory(device, image, hardwareBuffer, &memory);
-    if (result != VK_SUCCESS) return result;
+    if (result != VK_SUCCESS) {
+        if (vulkanWrapper.vkDestroyImage) {
+            vulkanWrapper.vkDestroyImage(device, image, NULL);
+        }
+        return result;
+    }
 
     swapchainImage->image = image;
     swapchainImage->memory = memory;
@@ -111,26 +138,47 @@ VkSurfaceFormatKHR* getSurfaceFormats(uint32_t* formatCount) {
 }
 
 XWindowSwapchain* XWindowSwapchain_create(VkDevice device, uint32_t graphicsQueueIndex, VkSwapchainCreateInfoKHR* swapchainInfo, JMethods* jmethods, int windowId) {
+    if (!device || !swapchainInfo || !jmethods) return NULL;
+
     XWindowSwapchain* swapchain = calloc(1, sizeof(XWindowSwapchain));
+    if (!swapchain) return NULL;
+
     swapchain->windowId = windowId;
     swapchain->imageCount = MAX(swapchainInfo->minImageCount, 1u);
     swapchain->currentImageIndex = 0;
     swapchain->images = calloc(swapchain->imageCount, sizeof(XWindowSwapchain_Image));
+    if (!swapchain->images) {
+        free(swapchain);
+        return NULL;
+    }
+
     swapchain->imageFormat = swapchainInfo->imageFormat;
     swapchain->imageUsage = swapchainInfo->imageUsage;
     memcpy(&swapchain->imageExtent, &swapchainInfo->imageExtent, sizeof(VkExtent2D));
     swapchain->jmethods = jmethods;
 
     VkResult result;
+    int createdCount = 0;
     for (int i = 0; i < swapchain->imageCount; i++) {
         result = createImage(device, swapchain, &swapchain->images[i]);
         if (result != VK_SUCCESS) goto error;
+        createdCount++;
     }
 
-    vulkanWrapper.vkGetDeviceQueue(device, graphicsQueueIndex, 0, &swapchain->queue);
+    if (vulkanWrapper.vkGetDeviceQueue) {
+        vulkanWrapper.vkGetDeviceQueue(device, graphicsQueueIndex, 0, &swapchain->queue);
+    }
     return swapchain;
 
 error:
+    for (int j = 0; j < createdCount; j++) {
+        if (vulkanWrapper.vkDestroyImage && swapchain->images[j].image) {
+            vulkanWrapper.vkDestroyImage(device, swapchain->images[j].image, NULL);
+        }
+        if (vulkanWrapper.vkFreeMemory && swapchain->images[j].memory) {
+            vulkanWrapper.vkFreeMemory(device, swapchain->images[j].memory, NULL);
+        }
+    }
     MEMFREE(swapchain->images);
     MEMFREE(swapchain);
     return NULL;
@@ -139,8 +187,12 @@ error:
 void XWindowSwapchain_destroy(VkDevice device, XWindowSwapchain* swapchain) {
     if (!swapchain) return;
     for (int i = 0; i < swapchain->imageCount; i++) {
-        vulkanWrapper.vkDestroyImage(device, swapchain->images[i].image, NULL);
-        vulkanWrapper.vkFreeMemory(device, swapchain->images[i].memory, NULL);
+        if (vulkanWrapper.vkDestroyImage && swapchain->images[i].image) {
+            vulkanWrapper.vkDestroyImage(device, swapchain->images[i].image, NULL);
+        }
+        if (vulkanWrapper.vkFreeMemory && swapchain->images[i].memory) {
+            vulkanWrapper.vkFreeMemory(device, swapchain->images[i].memory, NULL);
+        }
     }
 
     MEMFREE(swapchain->images);
@@ -148,6 +200,8 @@ void XWindowSwapchain_destroy(VkDevice device, XWindowSwapchain* swapchain) {
 }
 
 VkResult XWindowSwapchain_acquireNextImage(XWindowSwapchain* swapchain, uint64_t timeout, VkSemaphore signalSemaphore, VkFence fence, uint32_t* imageIndex) {
+    if (!swapchain || !imageIndex) return VK_ERROR_DEVICE_LOST;
+
     if (signalSemaphore || fence) {
         VkSubmitInfo submitInfo = {0};
         submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -156,11 +210,13 @@ VkResult XWindowSwapchain_acquireNextImage(XWindowSwapchain* swapchain, uint64_t
             submitInfo.signalSemaphoreCount = 1;
         }
 
-        VkResult result = vulkanWrapper.vkQueueSubmit(swapchain->queue, 1, &submitInfo, fence);
-        if (result == VK_ERROR_DEVICE_LOST) return result;
+        if (vulkanWrapper.vkQueueSubmit && swapchain->queue) {
+            VkResult result = vulkanWrapper.vkQueueSubmit(swapchain->queue, 1, &submitInfo, fence);
+            if (result == VK_ERROR_DEVICE_LOST) return result;
+        }
     }
 
-    VkExtent2D windowSize;
+    VkExtent2D windowSize = {0};
     getWindowExtent(swapchain->jmethods, swapchain->windowId, &windowSize);
 
     VkResult result = VK_SUCCESS;
@@ -176,6 +232,7 @@ VkResult XWindowSwapchain_acquireNextImage(XWindowSwapchain* swapchain, uint64_t
 }
 
 void XWindowSwapchain_presentImage(XWindowSwapchain* swapchain) {
+    if (!swapchain || !swapchain->jmethods || !swapchain->jmethods->env || !swapchain->jmethods->obj || !swapchain->jmethods->updateWindowContent) return;
     (*swapchain->jmethods->env)->CallVoidMethod(swapchain->jmethods->env, swapchain->jmethods->obj,
                                                 swapchain->jmethods->updateWindowContent, swapchain->windowId);
 }
