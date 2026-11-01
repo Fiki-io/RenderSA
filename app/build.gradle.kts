@@ -8,7 +8,7 @@ android {
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   defaultConfig {
-    applicationId = "com.aistudio.rendersa.kxpqzm"
+    applicationId = "com.rendersa"
     minSdk = 26
     targetSdk = 28
     versionCode = 1

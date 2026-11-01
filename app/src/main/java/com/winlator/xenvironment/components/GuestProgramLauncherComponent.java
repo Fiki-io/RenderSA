@@ -144,11 +144,25 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
         envVars.put("XLOCALEDIR", rootDir + "/usr/share/X11/locale");
         envVars.put("WINEDEBUG", "+err,+warn,+loaddll");
         envVars.put("WINEESYNC", "1");
+        envVars.put("WINESERVER", rootDir + rootFS.getWinePath() + "/bin/wineserver");
 
         if (this.envVars != null) envVars.putAll(this.envVars);
 
-        File shmDir = new File(rootDir, "/tmp/shm");
+        File tmpDir = new File(rootDir, "tmp");
+        if (!tmpDir.isDirectory()) tmpDir.mkdirs();
+        FileUtils.chmod(tmpDir, 0777);
+
+        File shmDir = new File(rootDir, "tmp/shm");
         if (!shmDir.isDirectory()) shmDir.mkdirs();
+        FileUtils.chmod(shmDir, 0777);
+
+        File wineDir = new File(rootDir, rootFS.getWinePath() + "/bin");
+        File wineServerBin = new File(wineDir, "wineserver");
+        if (wineServerBin.exists()) FileUtils.chmod(wineServerBin, 0755);
+        File wineBin = new File(wineDir, "wine");
+        if (wineBin.exists()) FileUtils.chmod(wineBin, 0755);
+        File wine64Bin = new File(wineDir, "wine64");
+        if (wine64Bin.exists()) FileUtils.chmod(wine64Bin, 0755);
 
         File box64Bin = new File(rootDir, "/usr/local/bin/box64");
         if (!box64Bin.isFile()) {

@@ -15,7 +15,7 @@ object RootFsPathRelocator {
     private const val TAG = "RootFsPathRelocator"
     private const val WINLATOR_ROOTFS_PREFIX = "/data/data/com.winlator/files/rootfs"
     private const val WINLATOR_NEEDLE = "/data/data/com.winlator"
-    private const val RELOCATOR_STAMP_FILE = "home/xuser/.rendersa_relocated_v3"
+    private const val RELOCATOR_STAMP_FILE = "home/xuser/.rendersa_relocated_v4"
 
     data class RelocationReport(
         val symlinksCreated: Int,
@@ -46,7 +46,9 @@ object RootFsPathRelocator {
             "var/run"
         )
         for (rel in requiredDirs) {
-            File(rootDir, rel).mkdirs()
+            val d = File(rootDir, rel)
+            d.mkdirs()
+            FileUtils.chmod(d, 511) // 0777
         }
 
         // 2. Ensure lib/ld-linux-aarch64.so.1 and usr/lib/ld-linux-aarch64.so.1 both resolve
@@ -126,20 +128,35 @@ object RootFsPathRelocator {
         val replacementPairs = buildExactLengthReplacements(shortBase)
 
         // Always inspect critical runtime binaries on every launch
-        val criticalBinaries = listOf(
+        val wineRel = RuntimeEnvironmentManager.resolveWineRelativePath(rootDir)
+        val criticalBinaries = mutableListOf(
             File(rootDir, "usr/local/bin/box64"),
             File(rootDir, "usr/bin/box64"),
             File(rootDir, "usr/lib/libvulkan_vortek.so"),
             File(rootDir, "lib/libvulkan_vortek.so"),
             File(rootDir, "usr/lib/libvulkan_freedreno.so"),
-            File(rootDir, "usr/lib/alsa-lib/libasound_module_pcm_android_aserver.so")
+            File(rootDir, "usr/lib/alsa-lib/libasound_module_pcm_android_aserver.so"),
+            File(rootDir, "$wineRel/bin/wine"),
+            File(rootDir, "$wineRel/bin/wine64"),
+            File(rootDir, "$wineRel/bin/wineserver"),
+            File(rootDir, "$wineRel/lib/wine/x86_64-unix/ntdll.so"),
+            File(rootDir, "$wineRel/lib/wine/x86_64-unix/libwine.so.1"),
+            File(rootDir, "$wineRel/lib/wine/i386-unix/ntdll.so"),
+            File(rootDir, "$wineRel/lib/wine/aarch64-unix/ntdll.so")
         )
+        if (wineRel != "opt/wine") {
+            criticalBinaries.add(File(rootDir, "opt/wine/bin/wine"))
+            criticalBinaries.add(File(rootDir, "opt/wine/bin/wine64"))
+            criticalBinaries.add(File(rootDir, "opt/wine/bin/wineserver"))
+            criticalBinaries.add(File(rootDir, "opt/wine/lib/wine/x86_64-unix/ntdll.so"))
+        }
         for (bin in criticalBinaries) {
             if (bin.isFile && !FileUtils.isSymlink(bin)) {
                 if (patchElfPtInterpIfNeeded(bin, dynamicLinkerShortPath)) {
                     elfInterpsPatched++
                 }
                 elfStringsPatched += patchElfBytesInPlace(bin, shortBase, replacementPairs)
+                FileUtils.chmod(bin, 493) // 0755
             }
         }
 
@@ -151,9 +168,11 @@ object RootFsPathRelocator {
                 File(rootDir, "sbin"),
                 File(rootDir, "usr/sbin"),
                 File(rootDir, "usr/lib"),
-                File(rootDir, "opt/wine/bin"),
-                File(rootDir, "opt/wine/lib/wine/aarch64-unix"),
-                File(rootDir, "opt/wine/lib/wine/x86_64-unix")
+                File(rootDir, "lib"),
+                File(rootDir, "$wineRel/bin"),
+                File(rootDir, "$wineRel/lib/wine/aarch64-unix"),
+                File(rootDir, "$wineRel/lib/wine/x86_64-unix"),
+                File(rootDir, "$wineRel/lib/wine/i386-unix")
             )
             val visitedCanonical = HashSet<String>()
             for (dir in scanDirs) {
@@ -308,6 +327,23 @@ object RootFsPathRelocator {
     }
 
     private fun buildExactLengthReplacements(shortBase: String): List<Pair<ByteArray, ByteArray>> {
+        val result = ArrayList<Pair<ByteArray, ByteArray>>()
+        val needle = WINLATOR_NEEDLE
+
+        // 1. Direct 1:1 replacement when package name length is 12 (e.g. "com.rendersa" vs "com.winlator")
+        if (shortBase.length == needle.length) {
+            val rootFsPrefix = "$shortBase/files/rootfs"
+            result.add(
+                WINLATOR_ROOTFS_PREFIX.toByteArray(Charsets.US_ASCII) to
+                    rootFsPrefix.toByteArray(Charsets.US_ASCII)
+            )
+            result.add(
+                needle.toByteArray(Charsets.US_ASCII) to
+                    shortBase.toByteArray(Charsets.US_ASCII)
+            )
+        }
+
+        // 2. Subpath mappings with slash padding or symlink characters
         val mappings = listOf(
             "$WINLATOR_ROOTFS_PREFIX/lib/ld-linux-aarch64.so.1" to 'l',
             "$WINLATOR_ROOTFS_PREFIX/tmp/.X11-unix" to 'x',
@@ -321,9 +357,9 @@ object RootFsPathRelocator {
             "$WINLATOR_ROOTFS_PREFIX/opt/wine" to 'W',
             "$WINLATOR_ROOTFS_PREFIX/etc/alsa" to 'A',
             "$WINLATOR_ROOTFS_PREFIX/usr/lib" to 'L',
-            "$WINLATOR_ROOTFS_PREFIX/usr/bin" to 'B'
+            "$WINLATOR_ROOTFS_PREFIX/usr/bin" to 'B',
+            "$WINLATOR_ROOTFS_PREFIX/tmp" to 'T'
         )
-        val result = ArrayList<Pair<ByteArray, ByteArray>>()
         for ((oldStr, symChar) in mappings) {
             val targetLen = oldStr.length
             val slashCount = targetLen - shortBase.length - 1
@@ -336,12 +372,19 @@ object RootFsPathRelocator {
                 }
             }
         }
-        // Also handle standalone "/data/data/com.winlator/files/rootfs/lib\0\0" (42 bytes in .dynstr)
+        // Handle standalone "/data/data/com.winlator/files/rootfs/lib\0\0" (42 bytes in .dynstr)
         val oldRpathPadded = "$WINLATOR_ROOTFS_PREFIX/lib\u0000\u0000".toByteArray(Charsets.US_ASCII)
-        val newRpath = "$shortBase/L\u0000".toByteArray(Charsets.US_ASCII)
+        val newRpath = if (shortBase.length == needle.length) {
+            "$shortBase/files/rootfs/lib\u0000\u0000".toByteArray(Charsets.US_ASCII)
+        } else {
+            "$shortBase/L\u0000".toByteArray(Charsets.US_ASCII)
+        }
         if (oldRpathPadded.size == newRpath.size) {
             result.add(oldRpathPadded to newRpath)
         }
+
+        // Sort by length descending so longer exact patterns match before shorter prefix
+        result.sortByDescending { it.first.size }
         return result
     }
 
