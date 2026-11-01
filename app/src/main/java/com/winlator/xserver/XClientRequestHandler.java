@@ -161,7 +161,11 @@ public class XClientRequestHandler implements RequestHandler {
         try {
             if (opcode < 0) {
                 Extension extension = client.xServer.getExtension(opcode);
-                if (extension != null) extension.handleRequest(client, inputStream, outputStream);
+                if (extension != null) {
+                    extension.handleRequest(client, inputStream, outputStream);
+                } else {
+                    client.skipRequest();
+                }
             }
             else {
                 switch (opcode) {
@@ -425,6 +429,10 @@ public class XClientRequestHandler implements RequestHandler {
         catch (XRequestError e) {
             client.skipRequest();
             e.sendError(client, opcode);
+        }
+        catch (Throwable t) {
+            client.skipRequest();
+            android.util.Log.e("XClientRequestHandler", "Unhandled error processing opcode " + opcode, t);
         }
 
         return true;

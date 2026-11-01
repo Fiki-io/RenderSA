@@ -9,7 +9,6 @@
 #include <unistd.h>
 #include <string.h>
 #include <malloc.h>
-#include <jni.h>
 #include <android/log.h>
 #include <pthread.h>
 
@@ -17,6 +16,7 @@
 #include "jni_utils.h"
 
 #define MAX_EVENTS 10
+#define LOG_TAG "XConnectorEpoll"
 
 typedef struct JMethods {
     JavaVM* jvm;
@@ -43,9 +43,29 @@ typedef struct ConnectedClient {
     int fd;
     int shutdownFd;
     bool running;
-    void* tag;
+    jobject tag;
     JMethods jmethods;
 } ConnectedClient;
+
+static JNIEnv* getThreadEnv(JavaVM* jvm) {
+    if (!jvm) return NULL;
+    JNIEnv* env = NULL;
+    jint res = (*jvm)->GetEnv(jvm, (void**)&env, JNI_VERSION_1_6);
+    if (res != JNI_OK || !env) {
+        if ((*jvm)->AttachCurrentThread(jvm, &env, NULL) != JNI_OK) {
+            return NULL;
+        }
+    }
+    return env;
+}
+
+static void checkAndClearException(JNIEnv* env, const char* location) {
+    if (env && (*env)->ExceptionCheck(env)) {
+        __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, "Pending Java exception caught in %s", location);
+        (*env)->ExceptionDescribe(env);
+        (*env)->ExceptionClear(env);
+    }
+}
 
 static int createServerSocket(const char* sockPath) {
     int fd = socket(AF_UNIX, SOCK_STREAM, 0);
@@ -69,15 +89,22 @@ error:
 }
 
 static void loadJMethods(JMethods* jmethods) {
-    JNIEnv* env;
-    (*jmethods->jvm)->AttachCurrentThread(jmethods->jvm, &env, NULL);
+    if (!jmethods || !jmethods->jvm) return;
+    JNIEnv* env = getThreadEnv(jmethods->jvm);
     jmethods->env = env;
+    if (!env || !jmethods->obj) return;
 
     jclass cls = (*env)->GetObjectClass(env, jmethods->obj);
+    if (!cls) {
+        checkAndClearException(env, "loadJMethods GetObjectClass");
+        return;
+    }
     jmethods->handleConnectionShutdown = (*env)->GetMethodID(env, cls, "handleConnectionShutdown", "(Ljava/lang/Object;)V");
     jmethods->handleNewConnection = (*env)->GetMethodID(env, cls, "handleNewConnection", "(JI)Ljava/lang/Object;");
     jmethods->handleExistingConnection = (*env)->GetMethodID(env, cls, "handleExistingConnection", "(Ljava/lang/Object;)V");
     jmethods->killAllConnections = (*env)->GetMethodID(env, cls, "killAllConnections", "()V");
+    (*env)->DeleteLocalRef(env, cls);
+    checkAndClearException(env, "loadJMethods GetMethodID");
 }
 
 static void XConnectorEpoll_stopEpollThread(XConnectorEpoll* connector);
@@ -111,6 +138,7 @@ static int waitForSocketRead(jint clientFd, jint shutdownFd) {
 }
 
 static void requestShutdown(int fd) {
+    if (fd < 0) return;
     const uint64_t shutdownValue = 1;
     write(fd, &shutdownValue, sizeof(uint64_t));
 }
@@ -130,7 +158,10 @@ static void XConnectorEpoll_destroy(JNIEnv* env, XConnectorEpoll* connector) {
     }
 
     if (connector->jmethods.obj) {
-        (*env)->DeleteGlobalRef(env, connector->jmethods.obj);
+        JNIEnv* currentEnv = env ? env : getThreadEnv(connector->jmethods.jvm);
+        if (currentEnv) {
+            (*currentEnv)->DeleteGlobalRef(currentEnv, connector->jmethods.obj);
+        }
         connector->jmethods.obj = NULL;
     }
 
@@ -140,6 +171,7 @@ static void XConnectorEpoll_destroy(JNIEnv* env, XConnectorEpoll* connector) {
 
 static XConnectorEpoll* XConnectorEpoll_allocate(JNIEnv* env, jobject obj, const char* sockPath) {
     XConnectorEpoll* connector = calloc(1, sizeof(XConnectorEpoll));
+    if (!connector) return NULL;
 
     connector->epollFd = epoll_create(MAX_EVENTS);
     if (connector->epollFd < 0) goto error;
@@ -163,7 +195,7 @@ error:
 }
 
 static void XConnectorEpoll_killConnection(XConnectorEpoll* connector, ConnectedClient* client) {
-    JMethods* jmethods = &connector->jmethods;
+    if (!connector || !client) return;
     client->running = false;
 
     if (connector->multithreadedClients) {
@@ -174,71 +206,121 @@ static void XConnectorEpoll_killConnection(XConnectorEpoll* connector, Connected
                 client->pollThread = 0;
             }
         }
-        else jmethods = &client->jmethods;
-
         CLOSEFD(client->shutdownFd);
     }
-    else removeFdFromEpoll(connector->epollFd, client->fd);
+    else {
+        removeFdFromEpoll(connector->epollFd, client->fd);
+    }
 
     CLOSEFD(client->fd);
 
     if (client->tag) {
-        void* tag = client->tag;
+        jobject tag = client->tag;
         client->tag = NULL;
-        if (jmethods->obj) {
-            (*jmethods->env)->CallVoidMethod(jmethods->env, jmethods->obj, jmethods->handleConnectionShutdown, tag);
+
+        JNIEnv* env = getThreadEnv(connector->jmethods.jvm);
+        if (env && connector->jmethods.obj && connector->jmethods.handleConnectionShutdown) {
+            (*env)->CallVoidMethod(env, connector->jmethods.obj, connector->jmethods.handleConnectionShutdown, tag);
+            checkAndClearException(env, "killConnection handleConnectionShutdown");
+        }
+        if (env) {
+            (*env)->DeleteGlobalRef(env, tag);
         }
     }
 }
 
 static void* pollThread(void* param) {
     ConnectedClient* client = param;
+    if (!client) return NULL;
+
     loadJMethods(&client->jmethods);
     JMethods* jmethods = &client->jmethods;
-    client->tag = (*jmethods->env)->CallObjectMethod(jmethods->env, jmethods->obj, jmethods->handleNewConnection, (jlong)client, client->fd);
+    JNIEnv* env = getThreadEnv(jmethods->jvm);
+
+    if (env && jmethods->obj && jmethods->handleNewConnection) {
+        jobject localTag = (*env)->CallObjectMethod(env, jmethods->obj, jmethods->handleNewConnection, (jlong)client, client->fd);
+        checkAndClearException(env, "pollThread handleNewConnection");
+        if (localTag) {
+            client->tag = (*env)->NewGlobalRef(env, localTag);
+            (*env)->DeleteLocalRef(env, localTag);
+        }
+    }
 
     int res;
     do {
         res = waitForSocketRead(client->fd, client->shutdownFd);
-        if (res == 1 && client->running) (*jmethods->env)->CallVoidMethod(jmethods->env, jmethods->obj, jmethods->handleExistingConnection, client->tag);
+        if (res == 1 && client->running && client->tag) {
+            env = getThreadEnv(jmethods->jvm);
+            if (env && jmethods->obj && jmethods->handleExistingConnection) {
+                (*env)->CallVoidMethod(env, jmethods->obj, jmethods->handleExistingConnection, client->tag);
+                checkAndClearException(env, "pollThread handleExistingConnection");
+            }
+        }
     }
     while (client->running && res >= 0);
 
+    env = getThreadEnv(jmethods->jvm);
     if (client->tag) {
-        void* tag = client->tag;
+        jobject tag = client->tag;
         client->tag = NULL;
-        if (jmethods->obj) {
-            (*jmethods->env)->CallVoidMethod(jmethods->env, jmethods->obj, jmethods->handleConnectionShutdown, tag);
+        if (env && jmethods->obj && jmethods->handleConnectionShutdown) {
+            (*env)->CallVoidMethod(env, jmethods->obj, jmethods->handleConnectionShutdown, tag);
+            checkAndClearException(env, "pollThread handleConnectionShutdown");
+        }
+        if (env) {
+            (*env)->DeleteGlobalRef(env, tag);
         }
     }
+
     if (jmethods->obj) {
-        (*jmethods->env)->DeleteGlobalRef(jmethods->env, jmethods->obj);
+        if (env) {
+            (*env)->DeleteGlobalRef(env, jmethods->obj);
+        }
         jmethods->obj = NULL;
+    }
+
+    if (env) {
+        checkAndClearException(env, "pollThread before detach");
     }
     (*jmethods->jvm)->DetachCurrentThread(jmethods->jvm);
     return NULL;
 }
 
 static void XConnectorEpoll_handleNewConnection(XConnectorEpoll* connector, int clientFd) {
+    if (!connector || clientFd < 0) return;
     JMethods* jmethods = &connector->jmethods;
     ConnectedClient* client = calloc(1, sizeof(ConnectedClient));
+    if (!client) {
+        close(clientFd);
+        return;
+    }
     client->fd = clientFd;
     client->running = true;
 
     if (connector->multithreadedClients) {
+        JNIEnv* env = getThreadEnv(connector->jmethods.jvm);
         client->jmethods.jvm = connector->jmethods.jvm;
-        client->jmethods.obj = (*jmethods->env)->NewGlobalRef(jmethods->env, connector->jmethods.obj);
+        client->jmethods.obj = (env && connector->jmethods.obj) ? (*env)->NewGlobalRef(env, connector->jmethods.obj) : NULL;
         client->shutdownFd = eventfd(0, EFD_NONBLOCK);
         pthread_create(&client->pollThread, NULL, pollThread, client);
     }
     else {
         addFdToEpoll(connector->epollFd, clientFd, client);
-        client->tag = (*jmethods->env)->CallObjectMethod(jmethods->env, jmethods->obj, jmethods->handleNewConnection, (jlong)client, clientFd);
+        JNIEnv* env = getThreadEnv(connector->jmethods.jvm);
+        if (env && jmethods->obj && jmethods->handleNewConnection) {
+            jobject localTag = (*env)->CallObjectMethod(env, jmethods->obj, jmethods->handleNewConnection, (jlong)client, clientFd);
+            checkAndClearException(env, "handleNewConnection CallObjectMethod");
+            if (localTag) {
+                client->tag = (*env)->NewGlobalRef(env, localTag);
+                (*env)->DeleteLocalRef(env, localTag);
+            }
+        }
     }
 }
 
 static void* epollThread(void* param) {
     XConnectorEpoll* connector = param;
+    if (!connector) return NULL;
     JMethods* jmethods = &connector->jmethods;
     loadJMethods(jmethods);
     struct epoll_event events[MAX_EVENTS] = {0};
@@ -253,31 +335,47 @@ static void* epollThread(void* param) {
             }
             else if (events[i].data.ptr != &connector->shutdownFd &&
                     (events[i].events & EPOLLIN)) {
-                ConnectedClient* client = events[i].data.ptr;
-                (*jmethods->env)->CallVoidMethod(jmethods->env, jmethods->obj, jmethods->handleExistingConnection, client->tag);
+                ConnectedClient* client = (ConnectedClient*)events[i].data.ptr;
+                if (client && client->running && client->tag) {
+                    JNIEnv* env = getThreadEnv(jmethods->jvm);
+                    if (env && jmethods->obj && jmethods->handleExistingConnection) {
+                        (*env)->CallVoidMethod(env, jmethods->obj, jmethods->handleExistingConnection, client->tag);
+                        checkAndClearException(env, "epollThread handleExistingConnection");
+                    }
+                }
             }
         }
     }
 
-    (*jmethods->env)->CallVoidMethod(jmethods->env, jmethods->obj, jmethods->killAllConnections);
+    JNIEnv* env = getThreadEnv(jmethods->jvm);
+    if (env && jmethods->obj && jmethods->killAllConnections) {
+        (*env)->CallVoidMethod(env, jmethods->obj, jmethods->killAllConnections);
+        checkAndClearException(env, "epollThread killAllConnections");
+    }
+
+    if (env) {
+        checkAndClearException(env, "epollThread before detach");
+    }
     (*jmethods->jvm)->DetachCurrentThread(jmethods->jvm);
     return NULL;
 }
 
 static void XConnectorEpoll_startEpollThread(XConnectorEpoll* connector, bool multithreadedClients) {
-    if (connector->running) return;
+    if (!connector || connector->running) return;
     connector->running = true;
     connector->multithreadedClients = multithreadedClients;
     pthread_create(&connector->epollThread, NULL, epollThread, connector);
 }
 
 static void XConnectorEpoll_stopEpollThread(XConnectorEpoll* connector) {
-    if (!connector->running) return;
+    if (!connector || !connector->running) return;
     connector->running = false;
     requestShutdown(connector->shutdownFd);
 
-    pthread_join(connector->epollThread, NULL);
-    connector->epollThread = 0;
+    if (connector->epollThread != 0) {
+        pthread_join(connector->epollThread, NULL);
+        connector->epollThread = 0;
+    }
 }
 
 JNIEXPORT void JNICALL
@@ -290,7 +388,6 @@ Java_com_winlator_xconnector_XConnectorEpoll_nativeAllocate(JNIEnv* env, jobject
                                                             jstring sockPath) {
     const char* pathPtr = (*env)->GetStringUTFChars(env, sockPath, 0);
     XConnectorEpoll* connector = XConnectorEpoll_allocate(env, obj, pathPtr);
-
     (*env)->ReleaseStringUTFChars(env, sockPath, pathPtr);
     return (jlong)connector;
 }

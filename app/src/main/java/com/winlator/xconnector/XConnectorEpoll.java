@@ -45,30 +45,43 @@ public class XConnectorEpoll {
 
     @Keep
     private void handleConnectionShutdown(Object tag) {
-        ConnectedClient client = (ConnectedClient)tag;
-        connectionHandler.handleConnectionShutdown(client);
-        client.destroy();
+        if (tag == null) return;
+        try {
+            ConnectedClient client = (ConnectedClient)tag;
+            connectionHandler.handleConnectionShutdown(client);
+            client.destroy();
 
-        synchronized (connectedClients) {
-            connectedClients.remove(client);
+            synchronized (connectedClients) {
+                connectedClients.remove(client);
+            }
+        }
+        catch (Throwable t) {
+            android.util.Log.e("XConnectorEpoll", "Error in handleConnectionShutdown", t);
         }
     }
 
     @Keep
     private Object handleNewConnection(long clientPtr, int fd) {
-        ConnectedClient client = connectionHandler.newConnectedClient(clientPtr, fd);
-        client.createInputStream(initialInputBufferCapacity);
-        client.createOutputStream(initialOutputBufferCapacity);
-        connectionHandler.handleNewConnection(client);
+        try {
+            ConnectedClient client = connectionHandler.newConnectedClient(clientPtr, fd);
+            client.createInputStream(initialInputBufferCapacity);
+            client.createOutputStream(initialOutputBufferCapacity);
+            connectionHandler.handleNewConnection(client);
 
-        synchronized (connectedClients) {
-            connectedClients.add(client);
+            synchronized (connectedClients) {
+                connectedClients.add(client);
+            }
+            return client;
         }
-        return client;
+        catch (Throwable t) {
+            android.util.Log.e("XConnectorEpoll", "Error in handleNewConnection", t);
+            return null;
+        }
     }
 
     @Keep
     private void handleExistingConnection(Object tag) {
+        if (tag == null) return;
         ConnectedClient client = (ConnectedClient)tag;
         XInputStream inputStream = client.getInputStream();
 
@@ -83,14 +96,27 @@ public class XConnectorEpoll {
             }
             else requestHandler.handleRequest(client);
         }
-        catch (IOException e) {
+        catch (Throwable e) {
+            android.util.Log.e("XConnectorEpoll", "Error in handleExistingConnection", e);
             killConnection(client);
         }
     }
 
     @Keep
     private void killAllConnections() {
-        while (!connectedClients.isEmpty()) killConnection(connectedClients.remove(0));
+        try {
+            ArrayList<ConnectedClient> copy;
+            synchronized (connectedClients) {
+                copy = new ArrayList<>(connectedClients);
+                connectedClients.clear();
+            }
+            for (ConnectedClient client : copy) {
+                killConnection(client);
+            }
+        }
+        catch (Throwable t) {
+            android.util.Log.e("XConnectorEpoll", "Error in killAllConnections", t);
+        }
     }
 
     public List<ConnectedClient> getClients() {

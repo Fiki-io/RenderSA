@@ -854,9 +854,8 @@ object RuntimeEnvironmentManager {
         val cleanNick = nickname.trim().ifEmpty { "Player" }
         val targetExe = gtaCheck.actualExeName.ifBlank { "gta_sa.exe" }
         val targetSampExe = gtaCheck.actualSampExeName.ifBlank { "samp.exe" }
-        val safeExe = if (targetExe.contains(" ")) "\"$targetExe\"" else targetExe
-        val safeSampExe = if (targetSampExe.contains(" ")) "\"$targetSampExe\"" else targetSampExe
-        val winHandlerPath = "C:\\windows\\winhandler.exe"
+        val dosTargetExe = if (targetExe.contains(" ")) "\"D:\\$targetExe\"" else "D:\\$targetExe"
+        val dosTargetSampExe = if (targetSampExe.contains(" ")) "\"D:\\$targetSampExe\"" else "D:\\$targetSampExe"
 
         return if (launchMode == AppConstants.MODE_SAMP && serverAddress.isNotBlank()) {
             val parts = serverAddress.trim().split(":")
@@ -864,12 +863,12 @@ object RuntimeEnvironmentManager {
             val port = parts.getOrNull(1)?.trim()?.ifEmpty { "7777" } ?: "7777"
             val passArg = if (serverPassword.isNotBlank()) " -z ${serverPassword.trim()}" else ""
             if (gtaCheck.sampExeExists) {
-                "wine explorer /desktop=shell,${AppConstants.RES_1280_720} $winHandlerPath /dir D:/ $safeSampExe $host:$port -n $cleanNick$passArg"
+                "wine explorer /desktop=shell,${AppConstants.RES_1280_720} $dosTargetSampExe $host:$port -n $cleanNick$passArg"
             } else {
-                "wine explorer /desktop=shell,${AppConstants.RES_1280_720} $winHandlerPath /dir D:/ $safeExe -c -n $cleanNick -h $host -p $port$passArg"
+                "wine explorer /desktop=shell,${AppConstants.RES_1280_720} $dosTargetExe -c -n $cleanNick -h $host -p $port$passArg"
             }
         } else {
-            "wine explorer /desktop=shell,${AppConstants.RES_1280_720} $winHandlerPath /dir D:/ $safeExe"
+            "wine explorer /desktop=shell,${AppConstants.RES_1280_720} $dosTargetExe"
         }
     }
 }

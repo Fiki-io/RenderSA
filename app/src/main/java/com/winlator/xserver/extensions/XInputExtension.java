@@ -85,7 +85,7 @@ public class XInputExtension extends Extension implements XResourceManager.OnRes
     }
 
     private void getClientPointer(XClient client, XInputStream inputStream, XOutputStream outputStream) throws IOException, XRequestError {
-        inputStream.skip(4);
+        client.skipRequest();
 
         try (XStreamLock lock = outputStream.lock()) {
             outputStream.writeByte(RESPONSE_CODE_SUCCESS);
@@ -141,7 +141,7 @@ public class XInputExtension extends Extension implements XResourceManager.OnRes
     }
 
     private void queryVersion(XClient client, XInputStream inputStream, XOutputStream outputStream) throws IOException, XRequestError {
-        inputStream.skip(4);
+        client.skipRequest();
 
         try (XStreamLock lock = outputStream.lock()) {
             outputStream.writeByte(RESPONSE_CODE_SUCCESS);
@@ -155,7 +155,7 @@ public class XInputExtension extends Extension implements XResourceManager.OnRes
     }
 
     private void queryDevice(XClient client, XInputStream inputStream, XOutputStream outputStream) throws IOException, XRequestError {
-        inputStream.skip(4);
+        client.skipRequest();
 
         final short numDevices = 1;
         final short numClasses = 3;
@@ -227,6 +227,7 @@ public class XInputExtension extends Extension implements XResourceManager.OnRes
                 queryDevice(client, inputStream, outputStream);
                 break;
             default:
+                client.skipRequest();
                 throw new BadImplementation();
         }
     }
