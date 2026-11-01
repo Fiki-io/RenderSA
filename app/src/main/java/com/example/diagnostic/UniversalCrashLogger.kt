@@ -780,7 +780,10 @@ object UniversalCrashLogger {
                 File(rootDir, "usr/share/vulkan/icd.d/vortek_icd.aarch64.json"),
                 File(rootDir, "usr/share/vulkan/icd.d/freedreno_icd.aarch64.json"),
                 File(rootDir, "home/xuser/.wine/system.reg"),
-                File(rootDir, "home/xuser/.wine/dosdevices/d:")
+                File(rootDir, "home/xuser/.wine/dosdevices/d:"),
+                File(rootDir, "home/xuser/.wine/drive_c/windows/winhandler.exe"),
+                File(rootDir, "home/xuser/.wine/drive_c/windows/system32/d3d9.dll"),
+                File(rootDir, "home/xuser/.wine/drive_c/windows/syswow64/d3d9.dll")
             )
 
             for (target in keyPaths) {
