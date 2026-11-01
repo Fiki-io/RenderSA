@@ -1,0 +1,6 @@
+{
+  "name": "RenderSA",
+  "description": "Native PC GTA San Andreas and SA-MP runtime launcher for Android powered by an overhauled C/C++ Vulkan, AAudio, and Box64 engine.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

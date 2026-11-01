@@ -1,0 +1,181 @@
+<resources>
+    <string name="app_name">RenderSA</string>
+
+    <!-- Header & Status Ringkas -->
+    <string name="header_subtitle">Runtime Native GTA SA &amp; SA-MP ARM64</string>
+    <string name="status_ready">Siap</string>
+    <string name="status_missing">Belum Siap</string>
+    <string name="status_extracting">Mengekstrak (%1$d%%)</string>
+    <string name="status_rootfs_label">RootFS</string>
+    <string name="status_gtasa_label">Direktori GTA SA</string>
+    <string name="status_samp_label">Modul SA-MP</string>
+
+    <!-- Tab Navigasi -->
+    <string name="tab_launcher">Peluncur &amp; SA-MP</string>
+    <string name="tab_engine_config">Setup &amp; Engine</string>
+
+    <!-- Seksi Peluncur -->
+    <string name="section_identity">Identitas Pemain SA-MP</string>
+    <string name="label_nickname">Nama Pemain (Nickname)</string>
+    <string name="hint_nickname">Contoh: Carl_Johnson</string>
+    <string name="desc_nickname">Disimpan langsung ke registri HKCU\\Software\\SAMP sebelum peluncuran.</string>
+
+    <string name="section_launch_actions">Mode Peluncuran</string>
+    <string name="action_launch_samp">Jalankan SA-MP</string>
+    <string name="action_launch_gtasa">Jalankan GTA SA (Singleplayer)</string>
+    <string name="desc_launch_prereq">Pastikan RootFS telah diimpor dan direktori GTA SA PC valid sebelum memulai sesi.</string>
+    <string name="desc_launch_samp_target">Target Server: %1$s</string>
+    <string name="desc_launch_samp_no_target">Pilih atau tambahkan server SA-MP di bawah untuk terhubung langsung.</string>
+
+    <!-- Seksi Daftar Server SA-MP -->
+    <string name="section_servers">Daftar Server SA-MP</string>
+    <string name="action_add_server">Tambah Server</string>
+    <string name="action_refresh_servers">Segarkan Ping</string>
+    <string name="empty_servers_text">Belum ada server SA-MP yang disimpan. Tambahkan alamat IP:Port server untuk memeriksa ping dan jumlah pemain secara langsung.</string>
+    <string name="server_status_querying">Memeriksa UDP...</string>
+    <string name="server_status_online">%1$d / %2$d Pemain</string>
+    <string name="server_status_offline">Tidak Merespons</string>
+    <string name="server_ping_ms">%1$d ms</string>
+    <string name="server_locked">Berkata Sandi</string>
+    <string name="server_gamemode_format">Mode: %1$s</string>
+    <string name="server_selected_tag">Terpilih</string>
+    <string name="action_select_server">Pilih</string>
+    <string name="action_query_server">Cek</string>
+    <string name="action_delete_server">Hapus</string>
+
+    <!-- Dialog Tambah Server -->
+    <string name="dialog_add_server_title">Tambah Server SA-MP</string>
+    <string name="dialog_add_server_desc">Masukkan alamat IP atau domain beserta port UDP server SA-MP (format IP:Port, default port 7777).</string>
+    <string name="hint_server_address">127.0.0.1:7777</string>
+    <string name="label_server_password">Kata Sandi Server (Opsional)</string>
+    <string name="hint_server_password">Kosongkan jika publik</string>
+    <string name="action_cancel">Batal</string>
+    <string name="action_save">Simpan</string>
+    <string name="action_confirm_delete">Hapus</string>
+    <string name="dialog_delete_server_title">Hapus Server</string>
+    <string name="dialog_delete_server_desc">Hapus server %1$s dari daftar tersimpan?</string>
+
+    <!-- Seksi Setup Berkas & RootFS -->
+    <string name="section_setup_files">Lingkungan Sistem &amp; Berkas Game</string>
+    <string name="row_rootfs_title">Sistem Dasar Linux &amp; Wine (rootfs.tzst)</string>
+    <string name="row_rootfs_desc_ready">Terverifikasi: Wine, Box64 0.4.4, dan kontainer sistem siap digunakan.</string>
+    <string name="row_rootfs_desc_missing">Belum terpasang. Pilih berkas rootfs.tzst dari penyimpanan perangkat untuk diekstrak.</string>
+    <string name="action_import_rootfs">Impor rootfs.tzst</string>
+    <string name="action_reimport_rootfs">Impor Ulang</string>
+
+    <string name="row_gtasa_dir_title">Direktori Instalasi GTA San Andreas PC</string>
+    <string name="row_gtasa_dir_desc_missing">Pilih folder GTA SA PC yang memuat gta_sa.exe dan samp.dll.</string>
+    <string name="row_gtasa_dir_desc_path">Path: %1$s</string>
+    <string name="action_select_gtasa_dir">Pilih Folder</string>
+    <string name="verify_gtasa_exe_ok">gta_sa.exe (%1$s)</string>
+    <string name="verify_gtasa_exe_missing">gta_sa.exe tidak ditemukan</string>
+    <string name="verify_samp_dll_ok">samp.dll (%1$s)</string>
+    <string name="verify_samp_dll_missing">samp.dll tidak ditemukan</string>
+    <string name="verify_samp_exe_ok">samp.exe (%1$s)</string>
+    <string name="verify_storage_perm_required">Izin Akses Semua Berkas belum aktif. Berikan izin penyimpanan agar berkas .exe dan .dll dapat dibaca langsung oleh Wine.</string>
+    <string name="action_grant_storage_permission">Izinkan Akses Penyimpanan</string>
+    <string name="dialog_storage_perm_title">Izin Akses Penyimpanan</string>
+    <string name="dialog_storage_perm_desc">RenderSA memerlukan izin Akses Semua Berkas (All Files Access) agar Wine dan Box64 dapat membaca berkas gta_sa.exe, samp.dll, dan data GTA San Andreas langsung dari penyimpanan perangkat.</string>
+    <string name="action_open_permission_settings">Berikan Izin</string>
+
+    <!-- Seksi Konfigurasi Engine Native -->
+    <string name="section_graphics_engine">Jalur Grafis &amp; Vulkan</string>
+    <string name="row_gpu_driver_title">Driver Grafis Vulkan</string>
+    <string name="row_gpu_driver_desc">Pilih jalur perender Vulkan sesuai arsitektur GPU perangkat.</string>
+    <string name="driver_auto">Otomatis (%1$s)</string>
+    <string name="driver_vortek">Vortek (Mali / MediaTek / Universal Vulkan)</string>
+    <string name="driver_turnip">Turnip + Zink (Adreno / Snapdragon)</string>
+    <string name="driver_zink">Sistem Zink (OpenGL di atas Vulkan)</string>
+
+    <string name="row_dxvk_title">Penerjemah DirectX 9 (DXVK)</string>
+    <string name="row_dxvk_desc">Mengubah panggilan D3D9 GTA SA menjadi perintah Vulkan secara langsung.</string>
+    <string name="dxvk_1_10_3">DXVK 1.10.3 (Ringan untuk Mali &amp; Adreno Lawas)</string>
+    <string name="dxvk_2_4_1">DXVK 2.4.1 (Modern dengan GPL / Async)</string>
+
+    <string name="row_resolution_title">Resolusi Render Internal</string>
+    <string name="row_resolution_desc">Resolusi framebuffer XServer &amp; D3D9. Resolusi lebih rendah meningkatkan FPS secara signifikan.</string>
+    <string name="res_854x480">854x480 (FWVGA - Beban GPU Rendah)</string>
+    <string name="res_960x540">960x540 (qHD - Seimbang)</string>
+    <string name="res_1280x720">1280x720 (HD - Standar)</string>
+    <string name="res_1600x900">1600x900 (HD+)</string>
+    <string name="res_1920x1080">1920x1080 (Full HD)</string>
+
+    <string name="section_cpu_audio_engine">CPU, Box64 &amp; Audio Native</string>
+    <string name="row_box64_preset_title">Profil Kompilasi JIT Box64</string>
+    <string name="row_box64_preset_desc">Mengatur agresivitas penerjemahan instruksi x86 ke ARM64 dan penyimpanan DynaCache.</string>
+    <string name="box64_performance">Performa Maksimal (FastNan,FastRound,BigBlock,Dynacache)</string>
+    <string name="box64_balanced">Seimbang (SafeFlags=1,BigBlock=2,Dynacache)</string>
+    <string name="box64_stability">Kompatibilitas Ketat (SafeFlags=2,StrongMem=1)</string>
+
+    <string name="row_cpu_affinity_title">Pemisahan Core CPU (P-Core / E-Core)</string>
+    <string name="row_cpu_affinity_desc">Kunci gta_sa.exe &amp; samp.dll di Performance Cores dan pindahkan wineserver ke Efficiency Cores.</string>
+
+    <string name="row_touch_controls_title">Kontrol Layar Sentuh Saat Bermain</string>
+    <string name="row_touch_controls_desc">Tampilkan tombol kontrol virtual di atas layar saat sesi permainan berlangsung.</string>
+
+    <string name="row_fps_hud_title">Indikator FPS &amp; Status Core di Layar</string>
+    <string name="row_fps_hud_desc">Tampilkan bar ringkas di bagian atas layar permainan untuk memantau FPS dan mengontrol input.</string>
+
+    <!-- Seksi Telemetri Perangkat Keras -->
+    <string name="section_hardware_telemetry">Telemetri Perangkat Keras &amp; Native</string>
+    <string name="telemetry_gpu_label">GPU Vulkan Terdeteksi</string>
+    <string name="telemetry_cpu_label">Topologi Kluster CPU</string>
+    <string name="telemetry_audio_label">Jalur Audio Native</string>
+    <string name="telemetry_audio_value">AAudio Low-Latency MMAP (Zero-Copy Shared Memory)</string>
+    <string name="telemetry_input_label">Jalur Input Native</string>
+    <string name="telemetry_input_value">Socket UDP C Non-Blocking (MSG_DONTWAIT)</string>
+    <string name="telemetry_cpu_format">%1$d Core (%2$d P-Core Maks %3$d MHz | Mask P:0x%4$s E:0x%5$s)</string>
+
+    <!-- Pesan Operasi & Error -->
+    <string name="msg_extracting_rootfs">Mengekstrak rootfs.tzst dan memasang komponen sistem...</string>
+    <string name="msg_rootfs_success">RootFS berhasil diekstrak dan terverifikasi siap digunakan.</string>
+    <string name="msg_rootfs_failed">Gagal mengekstrak atau memverifikasi rootfs.tzst: %1$s</string>
+    <string name="msg_gtasa_verified">Direktori GTA SA valid dan siap dijalankan.</string>
+    <string name="msg_gtasa_invalid">Direktori yang dipilih tidak memiliki berkas gta_sa.exe yang valid.</string>
+    <string name="msg_samp_missing_error">Berkas samp.dll tidak ditemukan di dalam direktori GTA SA.</string>
+    <string name="msg_nickname_empty_error">Masukkan nama pemain (Nickname) terlebih dahulu untuk menjalankan SA-MP.</string>
+    <string name="msg_server_empty_error">Pilih atau tambahkan minimal satu server SA-MP terlebih dahulu.</string>
+    <string name="msg_invalid_server_address">Format alamat server tidak valid. Gunakan format IP:Port (contoh 127.0.0.1:7777).</string>
+    <string name="msg_preparing_session">Menyiapkan kontainer, registri SAMP, dan driver Vulkan...</string>
+    <string name="msg_session_failed">Gagal menyiapkan lingkungan peluncuran: %1$s</string>
+
+    <!-- Layar Sesi Permainan (RenderSADisplayActivity) -->
+    <string name="hud_fps_format">%1$.1f FPS</string>
+    <string name="hud_pcore_active">P-Core Aktif</string>
+    <string name="hud_toggle_controls">Kontrol</string>
+    <string name="hud_toggle_keyboard">Papan Ketik</string>
+    <string name="hud_exit_session">Keluar</string>
+    <string name="dialog_exit_session_title">Akhiri Sesi Permainan</string>
+    <string name="dialog_exit_session_desc">Hentikan proses GTA SA dan kembali ke peluncur RenderSA?</string>
+    <string name="action_exit_now">Keluar</string>
+
+    <!-- Aksesibilitas / Content Description -->
+    <string name="cd_close_dialog">Tutup dialog</string>
+    <string name="cd_refresh_servers">Segarkan status semua server</string>
+    <string name="cd_add_server">Tambah server SA-MP baru</string>
+    <string name="cd_delete_server">Hapus server ini</string>
+    <string name="cd_query_server">Periksa ping server ini</string>
+    <string name="cd_chevron_select">Ubah pilihan</string>
+
+    <!-- Sistem Penahan Crash & Diagnostik Universal -->
+    <string name="action_open_diagnostics">Log &amp; Diagnostik</string>
+    <string name="crash_hold_badge">SISTEM PENAHAN ERROR AKTIF</string>
+    <string name="crash_banner_detected_title">Error / Crash Sesi Terakhir Tertangkap</string>
+    <string name="crash_banner_detected_desc">Aplikasi menahan dan merekam detail error fatal dari sesi sebelumnya. Buka untuk melihat atau menyalin log lengkap.</string>
+    <string name="action_view_crash_log">Lihat &amp; Salin Log</string>
+    <string name="action_clear_crash_log">Bersihkan Catatan</string>
+    <string name="action_copy_full_log">Salin Log</string>
+    <string name="action_copy_copied_confirm">Log Tersalin</string>
+    <string name="action_save_log_file">Simpan Berkas</string>
+    <string name="action_return_launcher">Kembali ke Peluncur</string>
+    <string name="action_close_log_viewer">Tutup Panel Log</string>
+    <string name="msg_log_copied_clipboard">Seluruh log diagnostik (%1$d karakter) berhasil disalin ke Clipboard.</string>
+    <string name="msg_log_saved_path">Berkas log disimpan ke: %1$s</string>
+    <string name="log_tab_all">Semua Log</string>
+    <string name="log_tab_error">Detail Error</string>
+    <string name="log_tab_wine_box64">Wine &amp; Box64</string>
+    <string name="log_tab_rootfs">RootFS &amp; ELF</string>
+    <string name="log_tab_checkpoints">Tahapan</string>
+    <string name="log_tab_logcat">Logcat</string>
+    <string name="session_Overlay_log_btn">Log</string>
+</resources>
