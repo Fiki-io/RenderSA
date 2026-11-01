@@ -562,8 +562,9 @@ class RenderSADisplayActivity : ComponentActivity(), XSessionHost {
                 } else {
                     val durationMs = (System.currentTimeMillis() - launcherComponent.lastStartTimestampMs)
                         .coerceAtLeast(0L)
-                    // Jika belum ada laporan kegagalan ProcessBuilder.start(), catat berhentinya proses Box64/Wine
-                    val report = heldCrashReportState.value ?: UniversalCrashLogger.recordProcessUnexpectedExit(
+                    // Jika sudah ada laporan kegagalan ProcessBuilder.start() atau komponen fatal lain, pertahankan laporan tersebut
+                    val existingReport = heldCrashReportState.value ?: UniversalCrashLogger.activeCrashReport.value
+                    val report = existingReport ?: UniversalCrashLogger.recordProcessUnexpectedExit(
                         command = launcherComponent.lastFullCommand.ifBlank { baseCommand },
                         workingDir = rootDir.absolutePath,
                         pid = GuestProgramLauncherComponent.getCurrentPid(),

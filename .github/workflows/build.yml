@@ -1,0 +1,155 @@
+name: Build Debug APK
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build & Upload Debug APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Set up Prebuilt Android SDK & NDK
+        run: |
+          echo "=== Android Environment Diagnostics ==="
+          echo "ANDROID_HOME: $ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT: $ANDROID_SDK_ROOT"
+
+          # Detect highest available preinstalled NDK in GitHub Actions runner
+          if [ -d "/usr/local/lib/android/sdk/ndk" ]; then
+            AVAILABLE_NDK=$(ls -d /usr/local/lib/android/sdk/ndk/* 2>/dev/null | sort -V | tail -n 1)
+            if [ -n "$AVAILABLE_NDK" ]; then
+              echo "Preinstalled NDK found at: $AVAILABLE_NDK"
+              echo "ANDROID_NDK_HOME=$AVAILABLE_NDK" >> $GITHUB_ENV
+              echo "ANDROID_NDK_ROOT=$AVAILABLE_NDK" >> $GITHUB_ENV
+            fi
+          fi
+
+          echo "ANDROID_HOME=/usr/local/lib/android/sdk" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=/usr/local/lib/android/sdk" >> $GITHUB_ENV
+
+          # Accept SDK licenses if needed
+          yes | /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
+
+      - name: Install & Configure ccache
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ccache jq curl
+          echo "USE_CCACHE=1" >> $GITHUB_ENV
+          echo "CCACHE_DIR=$HOME/.ccache" >> $GITHUB_ENV
+          ccache -M 2G
+          ccache -s
+
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ${{ runner.os }}-ccache-${{ hashFiles('app/src/main/cpp/**') }}
+          restore-keys: |
+            ${{ runner.os }}-ccache-
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
+
+      - name: Grant Execute Permission to Gradle Wrapper
+        run: chmod +x gradlew
+
+      - name: Verify Debug Keystore
+        run: |
+          if [ -f "debug.keystore" ]; then
+            echo "Persistent debug.keystore is present."
+          else
+            echo "ERROR: debug.keystore is missing!"
+            exit 1
+          fi
+
+      - name: Build Debug APK
+        run: |
+          ./gradlew assembleDebug --stacktrace --no-daemon
+
+      - name: Locate Debug APK
+        id: locate_apk
+        run: |
+          APK_PATH=$(find app/build/outputs/apk/debug -name "*.apk" | head -n 1)
+          if [ -z "$APK_PATH" ] || [ ! -f "$APK_PATH" ]; then
+            echo "ERROR: Debug APK not found in app/build/outputs/apk/debug/"
+            exit 1
+          fi
+          echo "Found APK: $APK_PATH"
+          echo "apk_path=$APK_PATH" >> $GITHUB_OUTPUT
+          echo "apk_name=$(basename $APK_PATH)" >> $GITHUB_OUTPUT
+          echo "apk_size=$(du -h "$APK_PATH" | cut -f1)" >> $GITHUB_OUTPUT
+
+      - name: Upload APK to GoFile
+        id: upload_gofile
+        env:
+          APK_FILE: ${{ steps.locate_apk.outputs.apk_path }}
+        run: |
+          echo "=== Mengunggah APK ke GoFile ==="
+          echo "Target berkas: $APK_FILE"
+          
+          # Coba upload ke endpoint terpusat gofile
+          UPLOAD_RES=$(curl -s -F "file=@$APK_FILE" https://upload.gofile.io/uploadfile || true)
+          DOWNLOAD_URL=$(echo "$UPLOAD_RES" | jq -r '.data.downloadPage // empty')
+
+          # Fallback ke pencarian server aktif jika endpoint terpusat gagal
+          if [ -z "$DOWNLOAD_URL" ]; then
+            echo "Mencoba fallback via server GoFile spesifik..."
+            SERVER=$(curl -s https://api.gofile.io/servers | jq -r '.data.servers[0].name // empty')
+            if [ -n "$SERVER" ]; then
+              UPLOAD_RES=$(curl -s -F "file=@$APK_FILE" "https://${SERVER}.gofile.io/contents/uploadfile" || true)
+              DOWNLOAD_URL=$(echo "$UPLOAD_RES" | jq -r '.data.downloadPage // empty')
+            fi
+          fi
+
+          echo "gofile_url=$DOWNLOAD_URL" >> $GITHUB_OUTPUT
+          echo ""
+          echo "=========================================================="
+          if [ -n "$DOWNLOAD_URL" ]; then
+            echo "SUKSES: Tautan Unduh GoFile: $DOWNLOAD_URL"
+          else
+            echo "PERINGATAN: Gofile upload tidak mengembalikan URL: $UPLOAD_RES"
+          fi
+          echo "=========================================================="
+
+      - name: Publish Build Summary
+        if: always()
+        run: |
+          cat << 'EOF' >> $GITHUB_STEP_SUMMARY
+          ## 🎮 Hasil Build Debug APK RenderSA
+
+          | Informasi | Nilai |
+          |---|---|
+          | **Nama Berkas** | `${{ steps.locate_apk.outputs.apk_name }}` |
+          | **Ukuran Berkas** | `${{ steps.locate_apk.outputs.apk_size }}` |
+          | **Tipe Build** | `assembleDebug` (Ditandatangani dengan persistent `debug.keystore`) |
+          | **Tautan GoFile** | ${{ steps.upload_gofile.outputs.gofile_url && format('[Unduh dari GoFile]({0})', steps.upload_gofile.outputs.gofile_url) || 'Gagal / Tidak Tersedia' }} |
+          EOF
+
+      - name: Upload APK Artifact to GitHub
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.locate_apk.outputs.apk_name }}
+          path: ${{ steps.locate_apk.outputs.apk_path }}
+          retention-days: 14

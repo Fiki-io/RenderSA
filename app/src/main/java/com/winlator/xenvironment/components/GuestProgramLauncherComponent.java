@@ -150,7 +150,18 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
         File shmDir = new File(rootDir, "/tmp/shm");
         if (!shmDir.isDirectory()) shmDir.mkdirs();
 
-        String command = rootDir + "/usr/local/bin/box64 " + guestExecutable;
+        File box64Bin = new File(rootDir, "/usr/local/bin/box64");
+        if (!box64Bin.isFile()) {
+            File box64Alt = new File(rootDir, "/usr/bin/box64");
+            if (box64Alt.isFile()) {
+                box64Bin = box64Alt;
+            }
+        }
+        if (box64Bin.exists()) {
+            FileUtils.chmod(box64Bin, 0755);
+        }
+
+        String command = box64Bin.getAbsolutePath() + " " + guestExecutable;
         lastFullCommand = command;
         lastEnvSummary = envVars.toString().replace(" ", "\n  ");
         lastStartTimestampMs = System.currentTimeMillis();

@@ -50,15 +50,20 @@ object RootFsPathRelocator {
         }
 
         // 2. Ensure lib/ld-linux-aarch64.so.1 and usr/lib/ld-linux-aarch64.so.1 both resolve
-        val usrLibLd = File(rootDir, "usr/lib/ld-linux-aarch64.so.1")
-        val libLd = File(rootDir, "lib/ld-linux-aarch64.so.1")
-        val actualLdFile = when {
-            libLd.exists() -> libLd
-            usrLibLd.exists() -> usrLibLd
-            else -> libLd
-        }
+        val ldCandidates = listOf(
+            File(rootDir, "lib/ld-linux-aarch64.so.1"),
+            File(rootDir, "usr/lib/ld-linux-aarch64.so.1"),
+            File(rootDir, "lib/aarch64-linux-gnu/ld-linux-aarch64.so.1"),
+            File(rootDir, "usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1")
+        )
+        val actualLdFile = ldCandidates.firstOrNull { it.exists() } ?: ldCandidates[0]
         if (actualLdFile.exists()) {
             FileUtils.chmod(actualLdFile, 493) // 0755
+            val defaultLibLd = File(rootDir, "lib/ld-linux-aarch64.so.1")
+            if (!defaultLibLd.exists() && actualLdFile.absolutePath != defaultLibLd.absolutePath) {
+                defaultLibLd.parentFile?.mkdirs()
+                ensureSymlink(defaultLibLd, actualLdFile.absolutePath)
+            }
         }
 
         // 3. Create 1-character symlink bridge in context.dataDir (accessible via /data/data/<pkg>/<char>)
@@ -392,7 +397,10 @@ object RootFsPathRelocator {
                         if (currentInterp == newInterpPath) {
                             return false
                         }
-                        if (!currentInterp.startsWith(WINLATOR_NEEDLE)) {
+                        if (!currentInterp.startsWith(WINLATOR_NEEDLE) &&
+                            !currentInterp.startsWith("/data/data/") &&
+                            !currentInterp.startsWith("/data/user/")
+                        ) {
                             return false
                         }
                         val newBytes = newInterpPath.toByteArray(Charsets.US_ASCII)
