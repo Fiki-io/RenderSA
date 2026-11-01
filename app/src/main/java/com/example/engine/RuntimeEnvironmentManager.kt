@@ -30,7 +30,9 @@ data class GtaSaDirectoryVerification(
     val sampDllSizeBytes: Long,
     val sampExeExists: Boolean,
     val sampExeSizeBytes: Long,
-    val requiresStoragePermission: Boolean = false
+    val requiresStoragePermission: Boolean = false,
+    val actualExeName: String = "gta_sa.exe",
+    val actualSampExeName: String = "samp.exe"
 ) {
     val isReadyForSingleplayer: Boolean
         get() = !requiresStoragePermission && directoryExists && gtaSaExeExists && gtaSaExeSizeBytes > 64 * 1024L
@@ -266,6 +268,8 @@ object RuntimeEnvironmentManager {
         val gtaSaExe = findIgnoreCase("gta_sa.exe") ?: findIgnoreCase("gta-sa.exe")
         val sampDll = findIgnoreCase("samp.dll")
         val sampExe = findIgnoreCase("samp.exe")
+        val resolvedExeName = gtaSaExe?.name ?: "gta_sa.exe"
+        val resolvedSampExeName = sampExe?.name ?: "samp.exe"
 
         if (gtaSaExe != null && gtaSaExe.canRead()) {
             return GtaSaDirectoryVerification(
@@ -277,7 +281,9 @@ object RuntimeEnvironmentManager {
                 sampDllSizeBytes = sampDll?.length() ?: 0L,
                 sampExeExists = sampExe != null && sampExe.canRead(),
                 sampExeSizeBytes = sampExe?.length() ?: 0L,
-                requiresStoragePermission = false
+                requiresStoragePermission = false,
+                actualExeName = resolvedExeName,
+                actualSampExeName = resolvedSampExeName
             )
         }
 
@@ -311,7 +317,9 @@ object RuntimeEnvironmentManager {
                             sampDllSizeBytes = docSampDll?.length() ?: 0L,
                             sampExeExists = docSampExe != null,
                             sampExeSizeBytes = docSampExe?.length() ?: 0L,
-                            requiresStoragePermission = true
+                            requiresStoragePermission = true,
+                            actualExeName = docExe.name ?: "gta_sa.exe",
+                            actualSampExeName = docSampExe?.name ?: "samp.exe"
                         )
                     }
                 }
@@ -328,7 +336,9 @@ object RuntimeEnvironmentManager {
             sampDllSizeBytes = sampDll?.length() ?: 0L,
             sampExeExists = sampExe != null && sampExe.canRead(),
             sampExeSizeBytes = sampExe?.length() ?: 0L,
-            requiresStoragePermission = !hasStoragePerm
+            requiresStoragePermission = !hasStoragePerm,
+            actualExeName = resolvedExeName,
+            actualSampExeName = resolvedSampExeName
         )
     }
 
@@ -568,7 +578,7 @@ object RuntimeEnvironmentManager {
         }
     }
 
-    private fun setupDosDevices(winePrefixDir: File, gtaSaDirPath: String) {
+    fun setupDosDevices(winePrefixDir: File, gtaSaDirPath: String) {
         val dosDevicesDir = File(winePrefixDir, "dosdevices")
         dosDevicesDir.mkdirs()
 
@@ -577,8 +587,16 @@ object RuntimeEnvironmentManager {
         val dLink = File(dosDevicesDir, "d:")
 
         recreateSymlink("../drive_c", cLink)
-        recreateSymlink("../../../../", zLink)
-        recreateSymlink(gtaSaDirPath, dLink)
+        recreateSymlink("/", zLink)
+        if (gtaSaDirPath.isNotBlank()) {
+            val targetDir = File(gtaSaDirPath)
+            recreateSymlink(targetDir.absolutePath, dLink)
+            val exists = dLink.exists() || FileUtils.isSymlink(dLink)
+            UniversalCrashLogger.logCheckpoint(
+                "RuntimeEnvironmentManager",
+                "setupDosDevices: d: -> ${targetDir.absolutePath} (symlinkExists=$exists, targetExists=${targetDir.exists()})"
+            )
+        }
     }
 
     private fun recreateSymlink(target: String, linkFile: File) {
@@ -705,6 +723,9 @@ object RuntimeEnvironmentManager {
                     null,
                     "C:\\windows\\regedit.exe /C \"%1\""
                 )
+                reg.setStringValue("Software\\Wine\\Drives", "c:", "hd")
+                reg.setStringValue("Software\\Wine\\Drives", "d:", "hd")
+                reg.setStringValue("Software\\Wine\\Drives", "z:", "network")
             }
         }
 
@@ -816,18 +837,21 @@ object RuntimeEnvironmentManager {
         serverPassword: String
     ): String {
         val cleanNick = nickname.trim().ifEmpty { "Player" }
+        val targetExe = gtaCheck.actualExeName.ifBlank { "gta_sa.exe" }
+        val targetSampExe = gtaCheck.actualSampExeName.ifBlank { "samp.exe" }
+
         return if (launchMode == AppConstants.MODE_SAMP && serverAddress.isNotBlank()) {
             val parts = serverAddress.trim().split(":")
             val host = parts[0].trim()
             val port = parts.getOrNull(1)?.trim()?.ifEmpty { "7777" } ?: "7777"
             val passArg = if (serverPassword.isNotBlank()) " -z ${serverPassword.trim()}" else ""
             if (gtaCheck.sampExeExists) {
-                "wine explorer /desktop=shell,${AppConstants.RES_1280_720} D:\\samp.exe $host:$port -n $cleanNick$passArg"
+                "wine explorer /desktop=shell,${AppConstants.RES_1280_720} start /d \"D:\\\" D:\\$targetSampExe $host:$port -n $cleanNick$passArg"
             } else {
-                "wine explorer /desktop=shell,${AppConstants.RES_1280_720} D:\\gta_sa.exe -c -n $cleanNick -h $host -p $port$passArg"
+                "wine explorer /desktop=shell,${AppConstants.RES_1280_720} start /d \"D:\\\" D:\\$targetExe -c -n $cleanNick -h $host -p $port$passArg"
             }
         } else {
-            "wine explorer /desktop=shell,${AppConstants.RES_1280_720} D:\\gta_sa.exe"
+            "wine explorer /desktop=shell,${AppConstants.RES_1280_720} start /d \"D:\\\" D:\\$targetExe"
         }
     }
 }

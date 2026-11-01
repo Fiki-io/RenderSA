@@ -80,6 +80,8 @@ static void loadJMethods(JMethods* jmethods) {
     jmethods->killAllConnections = (*env)->GetMethodID(env, cls, "killAllConnections", "()V");
 }
 
+static void XConnectorEpoll_stopEpollThread(XConnectorEpoll* connector);
+
 static bool addFdToEpoll(int epollFd, int fd, void* ptr) {
     struct epoll_event event = {0};
     if (ptr) {
@@ -114,6 +116,9 @@ static void requestShutdown(int fd) {
 }
 
 static void XConnectorEpoll_destroy(JNIEnv* env, XConnectorEpoll* connector) {
+    if (!connector) return;
+    XConnectorEpoll_stopEpollThread(connector);
+
     if (connector->serverFd > 0) {
         removeFdFromEpoll(connector->epollFd, connector->serverFd);
         CLOSEFD(connector->serverFd);
@@ -164,8 +169,10 @@ static void XConnectorEpoll_killConnection(XConnectorEpoll* connector, Connected
     if (connector->multithreadedClients) {
         if (pthread_self() != client->pollThread) {
             requestShutdown(client->shutdownFd);
-            pthread_join(client->pollThread, NULL);
-            client->pollThread = 0;
+            if (client->pollThread != 0) {
+                pthread_join(client->pollThread, NULL);
+                client->pollThread = 0;
+            }
         }
         else jmethods = &client->jmethods;
 
@@ -176,8 +183,11 @@ static void XConnectorEpoll_killConnection(XConnectorEpoll* connector, Connected
     CLOSEFD(client->fd);
 
     if (client->tag) {
-        (*jmethods->env)->CallVoidMethod(jmethods->env, jmethods->obj, jmethods->handleConnectionShutdown, client->tag);
+        void* tag = client->tag;
         client->tag = NULL;
+        if (jmethods->obj) {
+            (*jmethods->env)->CallVoidMethod(jmethods->env, jmethods->obj, jmethods->handleConnectionShutdown, tag);
+        }
     }
 }
 
@@ -190,13 +200,20 @@ static void* pollThread(void* param) {
     int res;
     do {
         res = waitForSocketRead(client->fd, client->shutdownFd);
-        if (res == 1) (*jmethods->env)->CallVoidMethod(jmethods->env, jmethods->obj, jmethods->handleExistingConnection, client->tag);
+        if (res == 1 && client->running) (*jmethods->env)->CallVoidMethod(jmethods->env, jmethods->obj, jmethods->handleExistingConnection, client->tag);
     }
     while (client->running && res >= 0);
 
     if (client->tag) {
-        (*jmethods->env)->CallVoidMethod(jmethods->env, jmethods->obj, jmethods->handleConnectionShutdown, client->tag);
+        void* tag = client->tag;
         client->tag = NULL;
+        if (jmethods->obj) {
+            (*jmethods->env)->CallVoidMethod(jmethods->env, jmethods->obj, jmethods->handleConnectionShutdown, tag);
+        }
+    }
+    if (jmethods->obj) {
+        (*jmethods->env)->DeleteGlobalRef(jmethods->env, jmethods->obj);
+        jmethods->obj = NULL;
     }
     (*jmethods->jvm)->DetachCurrentThread(jmethods->jvm);
     return NULL;
@@ -210,7 +227,7 @@ static void XConnectorEpoll_handleNewConnection(XConnectorEpoll* connector, int 
 
     if (connector->multithreadedClients) {
         client->jmethods.jvm = connector->jmethods.jvm;
-        client->jmethods.obj = connector->jmethods.obj;
+        client->jmethods.obj = (*jmethods->env)->NewGlobalRef(jmethods->env, connector->jmethods.obj);
         client->shutdownFd = eventfd(0, EFD_NONBLOCK);
         pthread_create(&client->pollThread, NULL, pollThread, client);
     }

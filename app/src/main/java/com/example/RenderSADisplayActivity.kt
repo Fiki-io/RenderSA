@@ -484,6 +484,16 @@ class RenderSADisplayActivity : ComponentActivity(), XSessionHost {
             )
 
             val gtaCheck = RuntimeEnvironmentManager.verifyGtaSaDirectory(gtaSaPath, context)
+            val homeXUserDir = java.io.File(rootDir, "home/xuser")
+            val winePrefixDir = java.io.File(homeXUserDir, ".wine")
+            RuntimeEnvironmentManager.setupDosDevices(winePrefixDir, gtaCheck.directoryPath)
+
+            val targetExeFile = java.io.File(gtaCheck.directoryPath, gtaCheck.actualExeName)
+            UniversalCrashLogger.logCheckpoint(
+                "RenderSADisplayActivity",
+                "Verifikasi Exe Target: ${targetExeFile.absolutePath} (exists=${targetExeFile.exists()}, canRead=${targetExeFile.canRead()}, len=${targetExeFile.length()} B)"
+            )
+
             val baseCommand = RuntimeEnvironmentManager.buildGuestLaunchCommand(
                 launchMode = launchMode,
                 gtaCheck = gtaCheck,

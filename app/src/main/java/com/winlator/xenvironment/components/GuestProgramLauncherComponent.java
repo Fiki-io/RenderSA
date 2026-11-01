@@ -142,7 +142,7 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
         envVars.put("FONTCONFIG_FILE", rootDir + "/etc/fonts/fonts.conf");
         envVars.put("XKB_CONFIG_ROOT", rootDir + "/usr/share/X11/xkb");
         envVars.put("XLOCALEDIR", rootDir + "/usr/share/X11/locale");
-        envVars.put("WINEDEBUG", "+err,+warn,+loaddll");
+        envVars.put("WINEDEBUG", "+err,+warn,+loaddll,+process");
         envVars.put("WINEESYNC", "1");
         envVars.put("WINESERVER", rootDir + rootFS.getWinePath() + "/bin/wineserver");
 

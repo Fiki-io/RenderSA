@@ -6,6 +6,7 @@ plugins {
 android {
   namespace = "com.example"
   compileSdk { version = release(36) { minorApiLevel = 1 } }
+  ndkVersion = "27.3.13750724"
 
   defaultConfig {
     applicationId = "com.rendersa"

@@ -4,6 +4,7 @@ import android.content.Context;
 
 import com.example.diagnostic.UniversalCrashLogger;
 import com.winlator.core.FileUtils;
+import com.winlator.xenvironment.components.GuestProgramLauncherComponent;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -69,7 +70,21 @@ public class XEnvironment implements Iterable<EnvironmentComponent> {
     }
 
     public void stopEnvironmentComponents() {
-        for (EnvironmentComponent environmentComponent : this) {
+        GuestProgramLauncherComponent launcher = getComponent(GuestProgramLauncherComponent.class);
+        if (launcher != null) {
+            try {
+                launcher.stop();
+            } catch (Throwable t) {
+                UniversalCrashLogger.logCheckpoint(
+                    "XEnvironment",
+                    "Error saat menghentikan GuestProgramLauncherComponent: " + t.getMessage()
+                );
+            }
+        }
+
+        for (int i = components.size() - 1; i >= 0; i--) {
+            EnvironmentComponent environmentComponent = components.get(i);
+            if (environmentComponent == launcher) continue;
             String compName = environmentComponent.getClass().getSimpleName();
             try {
                 environmentComponent.stop();

@@ -28,27 +28,34 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Set up Prebuilt Android SDK & NDK
+      - name: Set up Prebuilt Android SDK, NDK & CMake
         run: |
           echo "=== Android Environment Diagnostics ==="
-          echo "ANDROID_HOME: $ANDROID_HOME"
-          echo "ANDROID_SDK_ROOT: $ANDROID_SDK_ROOT"
+          ANDROID_ROOT="/usr/local/lib/android/sdk"
+          echo "ANDROID_HOME=$ANDROID_ROOT" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$ANDROID_ROOT" >> $GITHUB_ENV
 
-          # Detect highest available preinstalled NDK in GitHub Actions runner
-          if [ -d "/usr/local/lib/android/sdk/ndk" ]; then
-            AVAILABLE_NDK=$(ls -d /usr/local/lib/android/sdk/ndk/* 2>/dev/null | sort -V | tail -n 1)
-            if [ -n "$AVAILABLE_NDK" ]; then
-              echo "Preinstalled NDK found at: $AVAILABLE_NDK"
-              echo "ANDROID_NDK_HOME=$AVAILABLE_NDK" >> $GITHUB_ENV
-              echo "ANDROID_NDK_ROOT=$AVAILABLE_NDK" >> $GITHUB_ENV
-            fi
+          # Use prebuilt NDK 27.3.13750724
+          TARGET_NDK="$ANDROID_ROOT/ndk/27.3.13750724"
+          if [ -d "$TARGET_NDK" ]; then
+            echo "Preinstalled NDK 27.3.13750724 found at: $TARGET_NDK"
+            echo "ANDROID_NDK_HOME=$TARGET_NDK" >> $GITHUB_ENV
+            echo "ANDROID_NDK_ROOT=$TARGET_NDK" >> $GITHUB_ENV
+          elif [ -d "$ANDROID_ROOT/ndk" ]; then
+            FALLBACK_NDK=$(ls -d $ANDROID_ROOT/ndk/* 2>/dev/null | sort -V | tail -n 1)
+            echo "Fallback NDK found at: $FALLBACK_NDK"
+            echo "ANDROID_NDK_HOME=$FALLBACK_NDK" >> $GITHUB_ENV
+            echo "ANDROID_NDK_ROOT=$FALLBACK_NDK" >> $GITHUB_ENV
           fi
 
-          echo "ANDROID_HOME=/usr/local/lib/android/sdk" >> $GITHUB_ENV
-          echo "ANDROID_SDK_ROOT=/usr/local/lib/android/sdk" >> $GITHUB_ENV
+          # Use prebuilt CMake 3.22.1
+          if [ -d "$ANDROID_ROOT/cmake/3.22.1/bin" ]; then
+            echo "Preinstalled CMake 3.22.1 added to PATH"
+            echo "$ANDROID_ROOT/cmake/3.22.1/bin" >> $GITHUB_PATH
+          fi
 
-          # Accept SDK licenses if needed
-          yes | /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
+          # Accept SDK licenses
+          yes | $ANDROID_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
 
       - name: Install & Configure ccache
         run: |

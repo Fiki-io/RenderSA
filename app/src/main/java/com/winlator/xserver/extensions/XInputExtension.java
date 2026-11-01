@@ -185,7 +185,7 @@ public class XInputExtension extends Extension implements XResourceManager.OnRes
             outputStream.writeInt(0);
             for (int i = 0; i < POINTER_BUTTON_COUNT; i++) outputStream.writeInt(0);
             int deviceClassLength = (outputStream.length() - start) / 4;
-            outputStream.writeIntAt(start + 2, deviceClassLength);
+            outputStream.writeShortAt(start + 2, (short)deviceClassLength);
 
             for (int i = 0; i < 2; i++) {
                 outputStream.writeShort((short)DeviceClass.VALUATOR_CLASS.ordinal());
