@@ -190,17 +190,13 @@ public abstract class ProcessHelper {
             if (startedQuotes) {
                 if (currChar == '"') {
                     startedQuotes = false;
-                    if (!value.isEmpty()) {
-                        value += '"';
-                        result.add(value);
-                        value = "";
-                    }
+                    result.add(value);
+                    value = "";
                 }
                 else value += currChar;
             }
             else if (currChar == '"') {
                 startedQuotes = true;
-                value += '"';
             }
             else {
                 nextChar = i < count-1 ? command.charAt(i+1) : '\0';

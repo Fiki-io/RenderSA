@@ -23,6 +23,7 @@ import java.util.List;
 
 public class GuestProgramLauncherComponent extends EnvironmentComponent {
     private String guestExecutable;
+    private File guestWorkingDir = null;
     private static int pid = -1;
     private EnvVars envVars;
     private String box64Preset = Box64Preset.PERFORMANCE;
@@ -74,6 +75,14 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
 
     public void setGuestExecutable(String guestExecutable) {
         this.guestExecutable = guestExecutable;
+    }
+
+    public File getGuestWorkingDir() {
+        return guestWorkingDir;
+    }
+
+    public void setGuestWorkingDir(File guestWorkingDir) {
+        this.guestWorkingDir = guestWorkingDir;
     }
 
     public EnvVars getEnvVars() {
@@ -180,7 +189,8 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
         lastEnvSummary = envVars.toString().replace(" ", "\n  ");
         lastStartTimestampMs = System.currentTimeMillis();
 
-        return ProcessHelper.exec(command, envVars, rootDir, (status) -> {
+        File workDir = (guestWorkingDir != null && guestWorkingDir.isDirectory()) ? guestWorkingDir : rootDir;
+        return ProcessHelper.exec(command, envVars, workDir, (status) -> {
             synchronized (lock) {
                 pid = -1;
             }

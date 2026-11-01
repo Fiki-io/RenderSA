@@ -354,6 +354,7 @@ class RenderSADisplayActivity : ComponentActivity(), XSessionHost {
 
             val renderer: GLRenderer = view.renderer
             renderer.setCursorVisible(false)
+            renderer.setForceWindowsFullscreen(true)
 
             server.windowManager.addOnWindowModificationListener(
                 object : com.winlator.xserver.WindowManager.OnWindowModificationListener {
@@ -365,9 +366,11 @@ class RenderSADisplayActivity : ComponentActivity(), XSessionHost {
                     }
 
                     override fun onMapWindow(window: Window) {
+                        val winName = window.name ?: ""
+                        val winClass = window.className ?: ""
                         UniversalCrashLogger.logCheckpoint(
                             "XServer",
-                            "Jendela X11 dipetakan: id=${window.id} (${window.width}x${window.height})"
+                            "Jendela X11 dipetakan: id=${window.id} (${window.width}x${window.height}) name=[$winName] class=[$winClass]"
                         )
                         lifecycleScope.launch(Dispatchers.IO) {
                             if (cpuAffinityEnabled && cpuTopology.totalCores > 1) {
@@ -561,6 +564,16 @@ class RenderSADisplayActivity : ComponentActivity(), XSessionHost {
             launcherComponent.envVars = envVars
             launcherComponent.box64Preset = box64Preset
             launcherComponent.guestExecutable = baseCommand
+
+            val gtaDir = java.io.File(gtaCheck.directoryPath)
+            if (gtaDir.isDirectory) {
+                launcherComponent.guestWorkingDir = gtaDir
+                UniversalCrashLogger.logCheckpoint(
+                    "RenderSADisplayActivity",
+                    "Menetapkan guestWorkingDir GTA: ${gtaDir.absolutePath}"
+                )
+            }
+
             launcherComponent.terminationCallback = com.winlator.core.Callback { status ->
                 val exitStatus = status ?: -1
                 if (userRequestedExit) {
@@ -576,7 +589,7 @@ class RenderSADisplayActivity : ComponentActivity(), XSessionHost {
                     val existingReport = heldCrashReportState.value ?: UniversalCrashLogger.activeCrashReport.value
                     val report = existingReport ?: UniversalCrashLogger.recordProcessUnexpectedExit(
                         command = launcherComponent.lastFullCommand.ifBlank { baseCommand },
-                        workingDir = rootDir.absolutePath,
+                        workingDir = launcherComponent.guestWorkingDir?.absolutePath ?: rootDir.absolutePath,
                         pid = GuestProgramLauncherComponent.getCurrentPid(),
                         exitCode = exitStatus,
                         durationMs = durationMs,

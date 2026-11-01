@@ -3,6 +3,7 @@ package com.winlator.winhandler;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 
+import com.example.diagnostic.UniversalCrashLogger;
 import com.winlator.core.Callback;
 import com.winlator.core.FileUtils;
 import com.winlator.core.StringUtils;
@@ -353,6 +354,10 @@ public class WinHandler {
         switch (requestCode) {
             case RequestCodes.INIT: {
                 initReceived = true;
+                UniversalCrashLogger.logCheckpoint(
+                    "WinHandler",
+                    "Koneksi INIT berhasil diterima dari winhandler.exe (port=" + port + ")"
+                );
 
                 synchronized (actions) {
                     actions.notify();

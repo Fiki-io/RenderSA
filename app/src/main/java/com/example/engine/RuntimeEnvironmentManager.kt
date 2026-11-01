@@ -566,6 +566,19 @@ object RuntimeEnvironmentManager {
             )
             installDxvkIfNeeded(context, winePrefixDir, dxvkVersion)
             installWinComponentsIfNeeded(context, winePrefixDir)
+
+            val winHandlerExe = File(winePrefixDir, "drive_c/windows/winhandler.exe")
+            if (!winHandlerExe.exists() || winHandlerExe.length() == 0L) {
+                TarCompressorUtils.extract(
+                    TarCompressorUtils.Type.ZSTD,
+                    context,
+                    "rootfs_patches.tzst",
+                    rootDir
+                )
+            }
+            File(winePrefixDir, "drive_c/users/xuser/Documents/GTA San Andreas User Files").mkdirs()
+            File(winePrefixDir, "drive_c/users/xuser/My Documents/GTA San Andreas User Files").mkdirs()
+
             configureWineRegistries(
                 systemRegFile = systemRegFile,
                 userRegFile = userRegFile,
@@ -741,6 +754,7 @@ object RuntimeEnvironmentManager {
                 reg.setStringValue(dllOverridesKey, "d3d10core", "native,builtin")
                 reg.setStringValue(dllOverridesKey, "d3d11", "native,builtin")
                 reg.setStringValue(dllOverridesKey, "dsound", "native,builtin")
+                reg.setStringValue(dllOverridesKey, "dinput8", "native,builtin")
                 reg.setStringValue(dllOverridesKey, "quartz", "native,builtin")
                 reg.setStringValue(dllOverridesKey, "devenum", "native,builtin")
                 reg.setStringValue(dllOverridesKey, "wmadmod", "native,builtin")
@@ -776,7 +790,7 @@ object RuntimeEnvironmentManager {
         envVars.put("WINEESYNC", "1")
         envVars.put("WINEDEBUG", "+err,+warn,+loaddll")
         envVars.put("WINEARCH", "win64")
-        envVars.put("WINEDLLOVERRIDES", "d3d9,dxgi,dsound=n,b;winemenubuilder.exe=d;mscoree,mshtml=d")
+        envVars.put("WINEDLLOVERRIDES", "d3d9,dxgi,dsound,dinput8=n,b;winemenubuilder.exe=d;mscoree,mshtml=d")
 
         envVars.put("BOX64_DYNAREC", "1")
         envVars.put("BOX64_DYNACACHE", "1")
@@ -840,6 +854,7 @@ object RuntimeEnvironmentManager {
         val cleanNick = nickname.trim().ifEmpty { "Player" }
         val targetExe = gtaCheck.actualExeName.ifBlank { "gta_sa.exe" }
         val targetSampExe = gtaCheck.actualSampExeName.ifBlank { "samp.exe" }
+        val winHandlerPath = "C:\\windows\\winhandler.exe"
 
         return if (launchMode == AppConstants.MODE_SAMP && serverAddress.isNotBlank()) {
             val parts = serverAddress.trim().split(":")
@@ -847,12 +862,12 @@ object RuntimeEnvironmentManager {
             val port = parts.getOrNull(1)?.trim()?.ifEmpty { "7777" } ?: "7777"
             val passArg = if (serverPassword.isNotBlank()) " -z ${serverPassword.trim()}" else ""
             if (gtaCheck.sampExeExists) {
-                "wine explorer /desktop=shell,${AppConstants.RES_1280_720} start /d \"D:\\\" D:\\$targetSampExe $host:$port -n $cleanNick$passArg"
+                "wine explorer /desktop=shell,${AppConstants.RES_1280_720} $winHandlerPath D:\\$targetSampExe $host:$port -n $cleanNick$passArg"
             } else {
-                "wine explorer /desktop=shell,${AppConstants.RES_1280_720} start /d \"D:\\\" D:\\$targetExe -c -n $cleanNick -h $host -p $port$passArg"
+                "wine explorer /desktop=shell,${AppConstants.RES_1280_720} $winHandlerPath D:\\$targetExe -c -n $cleanNick -h $host -p $port$passArg"
             }
         } else {
-            "wine explorer /desktop=shell,${AppConstants.RES_1280_720} start /d \"D:\\\" D:\\$targetExe"
+            "wine explorer /desktop=shell,${AppConstants.RES_1280_720} $winHandlerPath D:\\$targetExe"
         }
     }
 }
