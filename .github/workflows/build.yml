@@ -115,30 +115,56 @@ jobs:
         run: |
           echo "=== Mengunggah APK ke GoFile ==="
           echo "Target berkas: $APK_FILE"
-          
-          # Coba upload ke endpoint terpusat gofile
-          UPLOAD_RES=$(curl -s -F "file=@$APK_FILE" https://upload.gofile.io/uploadfile || true)
-          DOWNLOAD_URL=$(echo "$UPLOAD_RES" | jq -r '.data.downloadPage // empty')
 
-          # Fallback ke pencarian server aktif jika endpoint terpusat gagal
-          if [ -z "$DOWNLOAD_URL" ]; then
-            echo "Mencoba fallback via server GoFile spesifik..."
-            SERVER=$(curl -s https://api.gofile.io/servers | jq -r '.data.servers[0].name // empty')
-            if [ -n "$SERVER" ]; then
-              UPLOAD_RES=$(curl -s -F "file=@$APK_FILE" "https://${SERVER}.gofile.io/contents/uploadfile" || true)
-              DOWNLOAD_URL=$(echo "$UPLOAD_RES" | jq -r '.data.downloadPage // empty')
-            fi
-          fi
+          python3 - << 'PYEOF'
+          import os, sys, json, subprocess
 
-          echo "gofile_url=$DOWNLOAD_URL" >> $GITHUB_OUTPUT
-          echo ""
-          echo "=========================================================="
-          if [ -n "$DOWNLOAD_URL" ]; then
-            echo "SUKSES: Tautan Unduh GoFile: $DOWNLOAD_URL"
-          else
-            echo "PERINGATAN: Gofile upload tidak mengembalikan URL: $UPLOAD_RES"
-          fi
-          echo "=========================================================="
+          apk_path = os.environ.get("APK_FILE", "")
+          if not apk_path or not os.path.exists(apk_path):
+              print("ERROR: APK file tidak ditemukan:", apk_path)
+              sys.exit(1)
+
+          download_url = ""
+          try:
+              # Dapatkan daftar server aktif
+              servers_cmd = ["curl", "-s", "--max-time", "15", "https://api.gofile.io/servers"]
+              res = subprocess.run(servers_cmd, capture_output=True, text=True)
+              server_data = json.loads(res.stdout)
+              servers = [s.get("name") for s in server_data.get("data", {}).get("servers", []) if s.get("name")]
+          except Exception as e:
+              print("Peringatan saat mengambil daftar server:", e)
+              servers = ["store-eu-par-12", "store-eu-par-6", "store1"]
+
+          if not servers:
+              servers = ["store-eu-par-12", "store1"]
+
+          for server in servers[:3]:
+              try:
+                  print(f"Mencoba unggah ke server: {server}...")
+                  upload_url = f"https://{server}.gofile.io/contents/uploadfile"
+                  upload_cmd = ["curl", "-s", "--max-time", "300", "-F", f"file=@{apk_path}", upload_url]
+                  upload_res = subprocess.run(upload_cmd, capture_output=True, text=True)
+                  data = json.loads(upload_res.stdout)
+                  if data.get("status") == "ok":
+                      download_url = data.get("data", {}).get("downloadPage", "")
+                      if download_url:
+                          print("Unggah berhasil:", download_url)
+                          break
+              except Exception as e:
+                  print(f"Gagal unggah ke {server}:", e)
+
+          github_output = os.environ.get("GITHUB_OUTPUT", "")
+          if github_output:
+              with open(github_output, "a") as f:
+                  f.write(f"gofile_url={download_url}\n")
+
+          print("==========================================================")
+          if download_url:
+              print(f"SUKSES: Tautan Unduh GoFile: {download_url}")
+          else:
+              print("PERINGATAN: Unggah GoFile tidak mengembalikan URL.")
+          print("==========================================================")
+          PYEOF
 
       - name: Publish Build Summary
         if: always()
@@ -155,6 +181,7 @@ jobs:
           EOF
 
       - name: Upload APK Artifact to GitHub
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.locate_apk.outputs.apk_name }}
