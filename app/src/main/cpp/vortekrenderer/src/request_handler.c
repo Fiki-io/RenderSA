@@ -1956,8 +1956,8 @@ void vt_handle_vkGetPhysicalDeviceSurfaceCapabilitiesKHR(VkContext* context) {
     surfaceCapabilities.minImageCount = getSurfaceMinImageCount();
     surfaceCapabilities.maxImageCount = surfaceCapabilities.minImageCount == 1 ? 2 : 0;
     surfaceCapabilities.currentExtent = windowSize;
-    surfaceCapabilities.minImageExtent = windowSize;
-    surfaceCapabilities.maxImageExtent = windowSize;
+    surfaceCapabilities.minImageExtent = (VkExtent2D){.width = 1, .height = 1};
+    surfaceCapabilities.maxImageExtent = (VkExtent2D){.width = 4096, .height = 4096};
     surfaceCapabilities.maxImageArrayLayers = 1;
     surfaceCapabilities.supportedTransforms = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
     surfaceCapabilities.currentTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
@@ -2016,20 +2016,8 @@ void vt_handle_vkCreateSwapchainKHR(VkContext* context) {
     VkDevice device = VkObject_fromId(deviceId);
 
     VkResult result = VK_SUCCESS;
-    VkExtent2D windowSize;
-    getWindowExtent(&context->jmethods, windowId, &windowSize);
-
-    XWindowSwapchain* swapchain = NULL;
-    if (createInfo.imageExtent.width == windowSize.width && createInfo.imageExtent.height == windowSize.height) {
-        swapchain = XWindowSwapchain_create(device, context->graphicsQueueIndex, &createInfo, &context->jmethods, windowId);
-        if (!swapchain) result = VK_ERROR_INITIALIZATION_FAILED;
-    }
-    else if (windowSize.width == 0 || windowSize.height == 0) {
-        // Window size belum selesai dilaporkan oleh View layout, buat swapchain dengan imageExtent yang diminta
-        swapchain = XWindowSwapchain_create(device, context->graphicsQueueIndex, &createInfo, &context->jmethods, windowId);
-        if (!swapchain) result = VK_ERROR_INITIALIZATION_FAILED;
-    }
-    else result = VK_ERROR_SURFACE_LOST_KHR;
+    XWindowSwapchain* swapchain = XWindowSwapchain_create(device, context->graphicsQueueIndex, &createInfo, &context->jmethods, windowId);
+    if (!swapchain) result = VK_ERROR_INITIALIZATION_FAILED;
 
     VT_SERIALIZE_CMD(VkSwapchainKHR, (VkSwapchainKHR)swapchain);
     vt_send(context->clientRing, result, outputBuffer, bufferSize);

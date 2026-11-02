@@ -168,6 +168,22 @@ XWindowSwapchain* XWindowSwapchain_create(VkDevice device, uint32_t graphicsQueu
     if (vulkanWrapper.vkGetDeviceQueue) {
         vulkanWrapper.vkGetDeviceQueue(device, graphicsQueueIndex, 0, &swapchain->queue);
     }
+
+    if (vulkanWrapper.vkCreateCommandPool && vulkanWrapper.vkAllocateCommandBuffers) {
+        VkCommandPoolCreateInfo poolInfo = {0};
+        poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+        poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+        poolInfo.queueFamilyIndex = graphicsQueueIndex;
+        if (vulkanWrapper.vkCreateCommandPool(device, &poolInfo, NULL, &swapchain->commandPool) == VK_SUCCESS) {
+            VkCommandBufferAllocateInfo allocInfo = {0};
+            allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+            allocInfo.commandPool = swapchain->commandPool;
+            allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+            allocInfo.commandBufferCount = 1;
+            vulkanWrapper.vkAllocateCommandBuffers(device, &allocInfo, &swapchain->commandBuffer);
+        }
+    }
+
     return swapchain;
 
 error:
@@ -186,6 +202,13 @@ error:
 
 void XWindowSwapchain_destroy(VkDevice device, XWindowSwapchain* swapchain) {
     if (!swapchain) return;
+
+    if (swapchain->commandPool && vulkanWrapper.vkDestroyCommandPool) {
+        vulkanWrapper.vkDestroyCommandPool(device, swapchain->commandPool, NULL);
+        swapchain->commandPool = VK_NULL_HANDLE;
+        swapchain->commandBuffer = VK_NULL_HANDLE;
+    }
+
     for (int i = 0; i < swapchain->imageCount; i++) {
         if (vulkanWrapper.vkDestroyImage && swapchain->images[i].image) {
             vulkanWrapper.vkDestroyImage(device, swapchain->images[i].image, NULL);
@@ -210,26 +233,32 @@ VkResult XWindowSwapchain_acquireNextImage(XWindowSwapchain* swapchain, uint64_t
             submitInfo.signalSemaphoreCount = 1;
         }
 
+        // On Mali GPUs (MediaTek Dimensity / Mali-G57), empty vkQueueSubmit with fences
+        // causes hardware scheduler deadlock and QUEUE_BUFFER_TIMEOUT (waitFenceTime: 140ms).
+        // By recording and submitting an empty valid primary command buffer, the Mali GPU executes
+        // the job descriptor cleanly and signals the fence/semaphore immediately without stalling.
+        if (swapchain->commandBuffer && vulkanWrapper.vkBeginCommandBuffer && vulkanWrapper.vkEndCommandBuffer) {
+            VkCommandBufferBeginInfo beginInfo = {0};
+            beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+            beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+            vulkanWrapper.vkBeginCommandBuffer(swapchain->commandBuffer, &beginInfo);
+            vulkanWrapper.vkEndCommandBuffer(swapchain->commandBuffer);
+
+            submitInfo.commandBufferCount = 1;
+            submitInfo.pCommandBuffers = &swapchain->commandBuffer;
+        }
+
         if (vulkanWrapper.vkQueueSubmit && swapchain->queue) {
             VkResult result = vulkanWrapper.vkQueueSubmit(swapchain->queue, 1, &submitInfo, fence);
             if (result == VK_ERROR_DEVICE_LOST) return result;
         }
     }
 
-    VkExtent2D windowSize = {0};
-    getWindowExtent(swapchain->jmethods, swapchain->windowId, &windowSize);
-
-    VkResult result = VK_SUCCESS;
-    if (windowSize.width > 0 && windowSize.height > 0 &&
-        (swapchain->imageExtent.width != windowSize.width || swapchain->imageExtent.height != windowSize.height)) {
-        result = VK_ERROR_SURFACE_LOST_KHR;
-    }
-
     *imageIndex = swapchain->currentImageIndex;
     if (swapchain->imageCount > 1) {
         swapchain->currentImageIndex = (swapchain->currentImageIndex + 1) % (uint32_t)swapchain->imageCount;
     }
-    return result;
+    return VK_SUCCESS;
 }
 
 void XWindowSwapchain_presentImage(XWindowSwapchain* swapchain) {

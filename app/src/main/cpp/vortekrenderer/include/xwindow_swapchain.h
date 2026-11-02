@@ -19,6 +19,8 @@ typedef struct XWindowSwapchain {
     VkExtent2D imageExtent;
     VkImageUsageFlags imageUsage;
     VkQueue queue;
+    VkCommandPool commandPool;
+    VkCommandBuffer commandBuffer;
     JMethods* jmethods;
 } XWindowSwapchain;
 

@@ -111,20 +111,17 @@ object RootFsPathRelocator {
             }
         }
 
-        // 4b. Ensure libEGL.so.1 exists in rootfs usr/lib to satisfy Wine WGL & Box64 dlopen probing
+        // 4b. Remove bogus libEGL symlinks pointing to libGL (which lacks EGL symbols and breaks Wine WGL)
         val usrLibDir = File(rootDir, "usr/lib")
-        val libEgl1 = File(usrLibDir, "libEGL.so.1")
-        if (!libEgl1.exists() && !FileUtils.isSymlink(libEgl1)) {
-            val libGl1 = listOf(
-                File(usrLibDir, "libGL.so.1"),
-                File(usrLibDir, "libGL.so.1.7.0"),
-                File(usrLibDir, "libGL.so")
-            ).firstOrNull { it.exists() }
-            if (libGl1 != null) {
-                ensureSymlink(libEgl1, libGl1.absolutePath)
-                val libEgl = File(usrLibDir, "libEGL.so")
-                if (!libEgl.exists() && !FileUtils.isSymlink(libEgl)) {
-                    ensureSymlink(libEgl, libGl1.absolutePath)
+        for (name in listOf("libEGL.so.1", "libEGL.so")) {
+            val f = File(usrLibDir, name)
+            if (FileUtils.isSymlink(f)) {
+                try {
+                    val target = f.canonicalPath
+                    if (target.contains("libGL.so")) {
+                        f.delete()
+                    }
+                } catch (_: Throwable) {
                 }
             }
         }

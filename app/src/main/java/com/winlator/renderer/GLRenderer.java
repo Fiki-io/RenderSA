@@ -122,6 +122,10 @@ public class GLRenderer implements GLSurfaceView.Renderer, WindowManager.OnWindo
         } else {
             drawFrame();
         }
+
+        if (xServer != null && xServer.activity != null) {
+            xServer.activity.onFramePresented(0);
+        }
     }
 
     protected void drawFrame() {
@@ -225,6 +229,7 @@ public class GLRenderer implements GLSurfaceView.Renderer, WindowManager.OnWindo
             Texture texture = drawable.getTexture();
             if (texture == null) return;
             texture.updateFromDrawable();
+            if (!texture.isAllocated()) return;
 
             if (fullscreenTransformation != null) {
                 XForm.set(tmpXForm1, fullscreenTransformation.x, fullscreenTransformation.y, fullscreenTransformation.width, fullscreenTransformation.height);
@@ -323,7 +328,8 @@ public class GLRenderer implements GLSurfaceView.Renderer, WindowManager.OnWindo
         if (!window.isRenderable()) return;
         if (window != xServer.windowManager.rootWindow && window.attributes.isViewable()) {
             Window parent = window.getParent();
-            boolean transparent = window.attributes.isTransparent() || parent.attributes.isTransparent() || parent.isLayered() || window.isLayered();
+            boolean transparent = window.attributes.isTransparent() || parent.attributes.isTransparent() ||
+                                  parent.isLayered() || window.isLayered() || (parent != xServer.windowManager.rootWindow);
 
             if (forceWindowsFullscreen) {
                 short width = window.getWidth();

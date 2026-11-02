@@ -127,6 +127,9 @@ public class VortekRendererComponent extends EnvironmentComponent implements Con
                 drawable.forceUpdate();
             }
         }
+        if (xServer.activity != null) {
+            xServer.activity.onFramePresented(windowId);
+        }
     }
 
     @Override

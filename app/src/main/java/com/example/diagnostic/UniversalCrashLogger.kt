@@ -216,7 +216,7 @@ object UniversalCrashLogger {
         if (trimmed.contains("winemenubuilder.exe")) return
         if (trimmed.contains("poll_events bind failed, errno 13")) return
         if (trimmed.contains("Failed to start RpcSs service")) return
-        if (trimmed.contains("Failed to load libEGL.so.1")) return
+        if (trimmed.contains("Failed to load libEGL.so.1") || trimmed.contains("Failed to find EGL function")) return
         if (trimmed.contains("this is cpu-based conditional rendering") || trimmed.contains("VK_EXT_depth_clip_enable")) return
 
         // 2. Anti-looping / deduplikasi baris berturut-turut yang identik
