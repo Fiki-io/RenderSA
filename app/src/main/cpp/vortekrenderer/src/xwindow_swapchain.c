@@ -220,7 +220,8 @@ VkResult XWindowSwapchain_acquireNextImage(XWindowSwapchain* swapchain, uint64_t
     getWindowExtent(swapchain->jmethods, swapchain->windowId, &windowSize);
 
     VkResult result = VK_SUCCESS;
-    if (swapchain->imageExtent.width != windowSize.width || swapchain->imageExtent.height != windowSize.height) {
+    if (windowSize.width > 0 && windowSize.height > 0 &&
+        (swapchain->imageExtent.width != windowSize.width || swapchain->imageExtent.height != windowSize.height)) {
         result = VK_ERROR_SURFACE_LOST_KHR;
     }
 
@@ -233,6 +234,12 @@ VkResult XWindowSwapchain_acquireNextImage(XWindowSwapchain* swapchain, uint64_t
 
 void XWindowSwapchain_presentImage(XWindowSwapchain* swapchain) {
     if (!swapchain || !swapchain->jmethods || !swapchain->jmethods->env || !swapchain->jmethods->obj || !swapchain->jmethods->updateWindowContent) return;
+    if ((*swapchain->jmethods->env)->ExceptionCheck(swapchain->jmethods->env)) {
+        (*swapchain->jmethods->env)->ExceptionClear(swapchain->jmethods->env);
+    }
     (*swapchain->jmethods->env)->CallVoidMethod(swapchain->jmethods->env, swapchain->jmethods->obj,
                                                 swapchain->jmethods->updateWindowContent, swapchain->windowId);
+    if ((*swapchain->jmethods->env)->ExceptionCheck(swapchain->jmethods->env)) {
+        (*swapchain->jmethods->env)->ExceptionClear(swapchain->jmethods->env);
+    }
 }

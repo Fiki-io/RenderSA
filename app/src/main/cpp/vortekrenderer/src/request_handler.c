@@ -2024,6 +2024,11 @@ void vt_handle_vkCreateSwapchainKHR(VkContext* context) {
         swapchain = XWindowSwapchain_create(device, context->graphicsQueueIndex, &createInfo, &context->jmethods, windowId);
         if (!swapchain) result = VK_ERROR_INITIALIZATION_FAILED;
     }
+    else if (windowSize.width == 0 || windowSize.height == 0) {
+        // Window size belum selesai dilaporkan oleh View layout, buat swapchain dengan imageExtent yang diminta
+        swapchain = XWindowSwapchain_create(device, context->graphicsQueueIndex, &createInfo, &context->jmethods, windowId);
+        if (!swapchain) result = VK_ERROR_INITIALIZATION_FAILED;
+    }
     else result = VK_ERROR_SURFACE_LOST_KHR;
 
     VT_SERIALIZE_CMD(VkSwapchainKHR, (VkSwapchainKHR)swapchain);

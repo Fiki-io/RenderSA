@@ -208,6 +208,16 @@ object UniversalCrashLogger {
         if (trimmed.startsWith("[BOX64] Warning, function") && trimmed.contains("not found in lib")) return
         if (trimmed.contains("sigaction handler for sig 17") || trimmed.contains("Signal 17: si_addr")) return
         if (trimmed.contains(":trace:loaddll:") && (trimmed.contains(".acm") || trimmed.contains("acm"))) return
+        if (trimmed.contains("Error initializing native lib") && (trimmed.contains("libgtk") || trimmed.contains("libgstreamer") || trimmed.contains("libEGL"))) return
+        if (trimmed.contains("Error: loading a needed libs in elf libgstreamer")) return
+        if (trimmed.contains("com_get_class_object") || trimmed.contains("no class object")) return
+        if (trimmed.contains("Unknown SEQ default")) return
+        if (trimmed.contains("Failed to resolve your host name IP")) return
+        if (trimmed.contains("winemenubuilder.exe")) return
+        if (trimmed.contains("poll_events bind failed, errno 13")) return
+        if (trimmed.contains("Failed to start RpcSs service")) return
+        if (trimmed.contains("Failed to load libEGL.so.1")) return
+        if (trimmed.contains("this is cpu-based conditional rendering") || trimmed.contains("VK_EXT_depth_clip_enable")) return
 
         // 2. Anti-looping / deduplikasi baris berturut-turut yang identik
         synchronized(fileLock) {

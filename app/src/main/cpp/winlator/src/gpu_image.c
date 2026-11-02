@@ -90,7 +90,10 @@ EGLImageKHR createImageKHR(AHardwareBuffer* hardwareBuffer, int textureId) {
         return NULL;
     }
 
-    EGLDisplay eglDisplay = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+    EGLDisplay eglDisplay = eglGetCurrentDisplay();
+    if (eglDisplay == EGL_NO_DISPLAY) {
+        eglDisplay = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+    }
     EGLImageKHR imageKHR = eglCreateImageKHR(eglDisplay, EGL_NO_CONTEXT, EGL_NATIVE_BUFFER_ANDROID, clientBuffer, attribList);
     if (!imageKHR) {
         AHardwareBuffer_release(hardwareBuffer);
@@ -99,6 +102,10 @@ EGLImageKHR createImageKHR(AHardwareBuffer* hardwareBuffer, int textureId) {
 
     glBindTexture(GL_TEXTURE_2D, textureId);
     glEGLImageTargetTexture2DOES(GL_TEXTURE_2D, imageKHR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glBindTexture(GL_TEXTURE_2D, 0);
 
     return imageKHR;
@@ -111,8 +118,15 @@ AHardwareBuffer* createHardwareBuffer(int width, int height, bool cpuAccess, boo
     buffDesc.width = width;
     buffDesc.height = height;
     buffDesc.layers = 1;
-    buffDesc.usage = cpuAccess ? AHARDWAREBUFFER_USAGE_CPU_WRITE_OFTEN : AHARDWAREBUFFER_USAGE_GPU_COLOR_OUTPUT;
     buffDesc.format = useHALPixelFormatBGRA8888 ? HAL_PIXEL_FORMAT_BGRA_8888 : AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM;
+
+    uint64_t usage = AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE;
+    if (cpuAccess) {
+        usage |= AHARDWAREBUFFER_USAGE_CPU_WRITE_OFTEN | AHARDWAREBUFFER_USAGE_CPU_READ_OFTEN;
+    } else {
+        usage |= AHARDWAREBUFFER_USAGE_GPU_COLOR_OUTPUT;
+    }
+    buffDesc.usage = usage;
 
     AHardwareBuffer* hardwareBuffer = NULL;
     AHardwareBuffer_allocate(&buffDesc, &hardwareBuffer);

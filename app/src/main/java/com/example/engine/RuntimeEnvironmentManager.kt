@@ -567,6 +567,22 @@ object RuntimeEnvironmentManager {
             installDxvkIfNeeded(context, winePrefixDir, dxvkVersion)
             installWinComponentsIfNeeded(context, winePrefixDir)
 
+            val dxvkConfContent = """
+                d3d9.maxFrameLatency = 1
+                d3d9.deferSurfaceCreation = True
+                d3d9.samplerAnisotropy = 0
+                dxvk.numCompilerThreads = 1
+                dxvk.useRawSsbo = False
+            """.trimIndent()
+            val dxvkConfHome = File(homeXUserDir, "dxvk.conf")
+            dxvkConfHome.writeText(dxvkConfContent)
+            try {
+                val dxvkConfGame = File(gtaCheck.directoryPath, "dxvk.conf")
+                if (dxvkConfGame.parentFile?.canWrite() == true) {
+                    dxvkConfGame.writeText(dxvkConfContent)
+                }
+            } catch (_: Throwable) {}
+
             val winHandlerExe = File(winePrefixDir, "drive_c/windows/winhandler.exe")
             if (!winHandlerExe.exists() || winHandlerExe.length() == 0L) {
                 TarCompressorUtils.extract(
@@ -749,6 +765,7 @@ object RuntimeEnvironmentManager {
                 reg.setStringValue("Software\\Wine\\Drivers", "Graphics", "x11")
 
                 val dllOverridesKey = "Software\\Wine\\DllOverrides"
+                reg.setStringValue(dllOverridesKey, "d3d8", "native,builtin")
                 reg.setStringValue(dllOverridesKey, "d3d9", "native,builtin")
                 reg.setStringValue(dllOverridesKey, "dxgi", "native,builtin")
                 reg.setStringValue(dllOverridesKey, "d3d10core", "native,builtin")
@@ -790,7 +807,7 @@ object RuntimeEnvironmentManager {
         envVars.put("WINEESYNC", "1")
         envVars.put("WINEDEBUG", "-all,err+all")
         envVars.put("WINEARCH", "win64")
-        envVars.put("WINEDLLOVERRIDES", "d3d9,dxgi,dsound,dinput8=n,b;winemenubuilder.exe=d;mscoree,mshtml=d")
+        envVars.put("WINEDLLOVERRIDES", "d3d8,d3d9,dxgi,dsound,dinput8=n,b;winemenubuilder.exe=d;mscoree,mshtml=d")
 
         envVars.put("BOX64_DYNAREC", "1")
         envVars.put("BOX64_DYNACACHE", "1")
@@ -807,11 +824,14 @@ object RuntimeEnvironmentManager {
         envVars.put("MESA_NO_ERROR", "1")
         envVars.put("MESA_GL_VERSION_OVERRIDE", "4.6")
         envVars.put("MESA_GLES_VERSION_OVERRIDE", "3.2")
+        envVars.put("MESA_VK_WSI_PRESENT_MODE", "immediate")
+        envVars.put("ZINK_DESCRIPTORS", "lazy")
 
         envVars.put("DXVK_HUD", "0")
         envVars.put("DXVK_LOG_LEVEL", "warn")
         envVars.put("DXVK_STATE_CACHE", "1")
         envVars.put("DXVK_STATE_CACHE_PATH", dxvkCacheDir.absolutePath)
+        envVars.put("DXVK_CONFIG_FILE", File(rootDir, "home/xuser/dxvk.conf").absolutePath)
         if (dxvkVersion.startsWith("1.")) {
             envVars.put("DXVK_ASYNC", "1")
         }
