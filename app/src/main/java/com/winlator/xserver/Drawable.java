@@ -210,8 +210,8 @@ public class Drawable extends XResource {
     public void forceUpdate() {
         if (!offscreenStorage || useSharedData) {
             texture.setNeedsUpdate(true);
-            if (onDrawListener != null) onDrawListener.run();
         }
+        if (onDrawListener != null) onDrawListener.run();
     }
 
     public boolean isUseSharedData() {

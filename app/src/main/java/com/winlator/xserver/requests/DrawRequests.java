@@ -134,7 +134,13 @@ public abstract class DrawRequests {
         if (srcDrawable.isOffscreenStorage() && (srcDrawable.getData() == null || srcDrawable.isUseSharedData())) {
             dstDrawable.setData(null);
             dstDrawable.setTexture(srcDrawable.getTexture());
+            Runnable listener = dstDrawable.getOnDrawListener();
+            if (listener != null) listener.run();
             client.xServer.activity.onFramePresented(srcDrawableId);
+            com.winlator.renderer.GLRenderer renderer = client.xServer.getRenderer();
+            if (renderer != null && renderer.xServerView != null) {
+                renderer.xServerView.requestRender();
+            }
             return;
         }
 

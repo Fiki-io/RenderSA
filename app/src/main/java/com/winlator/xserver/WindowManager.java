@@ -92,7 +92,9 @@ public class WindowManager extends XResourceManager {
         window.sendEvent(Event.STRUCTURE_NOTIFY, new DestroyNotify(window, window));
         parent.sendEvent(Event.SUBSTRUCTURE_NOTIFY, new DestroyNotify(parent, window));
         windows.remove(window.id);
-        if (window.isInputOutput()) drawableManager.removeDrawable(window.getContent().id);
+        if (window.isInputOutput() && window.getContent() != null) {
+            drawableManager.removeDrawable(window.getContent().id);
+        }
         triggerOnFreeResourceListener(window);
         if (window == focusedWindow) revertFocus();
         parent.removeChild(window);
@@ -206,11 +208,15 @@ public class WindowManager extends XResourceManager {
 
         if (resized && window.isInputOutput()) {
             Drawable oldContent = window.getContent();
-            drawableManager.removeDrawable(oldContent.id);
-            Drawable newContent = drawableManager.createDrawable(oldContent.id, width, height, oldContent.visual);
-            newContent.setOffscreenStorage(oldContent.isOffscreenStorage());
-            newContent.setOnDrawListener(() -> triggerOnUpdateWindowContent(window));
-            window.setContent(newContent);
+            if (oldContent != null) {
+                drawableManager.removeDrawable(oldContent.id);
+                Drawable newContent = drawableManager.createDrawable(oldContent.id, width, height, oldContent.visual);
+                if (newContent != null) {
+                    newContent.setOffscreenStorage(oldContent.isOffscreenStorage());
+                    newContent.setOnDrawListener(() -> triggerOnUpdateWindowContent(window));
+                    window.setContent(newContent);
+                }
+            }
         }
 
         if (resized || window.getX() != x || window.getY() != y) {

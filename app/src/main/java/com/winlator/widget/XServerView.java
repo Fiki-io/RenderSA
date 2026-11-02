@@ -21,6 +21,7 @@ public class XServerView extends GLSurfaceView {
         setPreserveEGLContextOnPause(true);
         renderer = new GLRenderer(this, xServer);
         setRenderer(renderer);
+        if (xServer != null) xServer.setRenderer(renderer);
         setRenderMode(RENDERMODE_WHEN_DIRTY);
     }
 

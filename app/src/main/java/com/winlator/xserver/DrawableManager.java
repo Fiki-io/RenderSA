@@ -3,6 +3,7 @@ package com.winlator.xserver;
 import android.util.SparseArray;
 
 import com.winlator.core.Callback;
+import com.winlator.renderer.GLRenderer;
 import com.winlator.renderer.Texture;
 
 public class DrawableManager extends XResourceManager implements XResourceManager.OnResourceLifecycleListener {
@@ -32,15 +33,30 @@ public class DrawableManager extends XResourceManager implements XResourceManage
 
     public void removeDrawable(int id) {
         Drawable drawable = drawables.get(id);
+        if (drawable == null) {
+            drawables.remove(id);
+            return;
+        }
 
         final Texture texture = drawable.getTexture();
         if (texture != null) {
             if (texture.getOwner() == drawable) texture.setOwner(null);
-            xServer.getRenderer().xServerView.queueEvent(texture::destroy);
+            GLRenderer renderer = xServer != null ? xServer.getRenderer() : null;
+            if (renderer != null && renderer.xServerView != null) {
+                renderer.xServerView.queueEvent(texture::destroy);
+            } else {
+                texture.destroy();
+            }
         }
 
         Callback<Drawable> onDestroyListener = drawable.getOnDestroyListener();
-        if (onDestroyListener != null) onDestroyListener.call(drawable);
+        if (onDestroyListener != null) {
+            try {
+                onDestroyListener.call(drawable);
+            } catch (Throwable t) {
+                android.util.Log.e("DrawableManager", "Error calling onDestroyListener for drawable id=" + id, t);
+            }
+        }
 
         drawable.setOnDrawListener(null);
         drawables.remove(id);

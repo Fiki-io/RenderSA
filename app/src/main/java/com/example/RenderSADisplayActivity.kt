@@ -355,6 +355,7 @@ class RenderSADisplayActivity : ComponentActivity(), XSessionHost {
             val renderer: GLRenderer = view.renderer
             renderer.setCursorVisible(false)
             renderer.setForceWindowsFullscreen(true)
+            server.setRenderer(renderer)
 
             server.windowManager.addOnWindowModificationListener(
                 object : com.winlator.xserver.WindowManager.OnWindowModificationListener {

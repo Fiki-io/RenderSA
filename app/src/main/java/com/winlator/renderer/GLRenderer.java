@@ -68,6 +68,9 @@ public class GLRenderer implements GLSurfaceView.Renderer, WindowManager.OnWindo
     public GLRenderer(XServerView xServerView, XServer xServer) {
         this.xServerView = xServerView;
         this.xServer = xServer;
+        if (xServer != null) {
+            xServer.setRenderer(this);
+        }
         rootCursorDrawable = createRootCursorDrawable();
 
         quadVertices.put(new float[]{
@@ -217,8 +220,10 @@ public class GLRenderer implements GLSurfaceView.Renderer, WindowManager.OnWindo
     }
 
     private void renderWindowDrawable(Drawable drawable, int x, int y, boolean transparent, FullscreenTransformation fullscreenTransformation) {
+        if (drawable == null) return;
         synchronized (drawable.renderLock) {
             Texture texture = drawable.getTexture();
+            if (texture == null) return;
             texture.updateFromDrawable();
 
             if (fullscreenTransformation != null) {
