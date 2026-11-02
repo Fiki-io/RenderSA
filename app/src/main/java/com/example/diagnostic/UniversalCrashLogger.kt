@@ -860,7 +860,6 @@ object UniversalCrashLogger {
             }
 
             // Periksa isi vortek_icd.aarch64.json dan freedreno_icd.aarch64.json jika ada
-            val vortekIcd = File(rootDir, "usr/share/vulkan/icd.d/vortek_icd.aarch64.json")
             if (vortekIcd.isFile) {
                 try {
                     appendLine()
@@ -869,7 +868,6 @@ object UniversalCrashLogger {
                 } catch (_: Throwable) {
                 }
             }
-            val turnipIcd = File(rootDir, "usr/share/vulkan/icd.d/freedreno_icd.aarch64.json")
             if (turnipIcd.isFile) {
                 try {
                     appendLine()
