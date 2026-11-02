@@ -126,6 +126,15 @@ public class VortekRendererComponent extends EnvironmentComponent implements Con
             synchronized (drawable.renderLock) {
                 drawable.forceUpdate();
             }
+            Window parent = window.getParent();
+            if (parent != null && parent != xServer.windowManager.rootWindow && parent.getContent() != null) {
+                synchronized (parent.getContent().renderLock) {
+                    parent.getContent().forceUpdate();
+                }
+            }
+        }
+        if (xServer.getRenderer() != null && xServer.getRenderer().xServerView != null) {
+            xServer.getRenderer().xServerView.requestRender();
         }
         if (xServer.activity != null) {
             xServer.activity.onFramePresented(windowId);

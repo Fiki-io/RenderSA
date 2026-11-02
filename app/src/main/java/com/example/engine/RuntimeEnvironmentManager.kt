@@ -569,7 +569,6 @@ object RuntimeEnvironmentManager {
 
             val dxvkConfContent = """
                 d3d9.maxFrameLatency = 1
-                d3d9.deferSurfaceCreation = True
                 d3d9.samplerAnisotropy = 0
                 dxvk.numCompilerThreads = 1
                 dxvk.useRawSsbo = False

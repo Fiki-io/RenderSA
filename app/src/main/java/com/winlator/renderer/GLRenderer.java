@@ -241,7 +241,8 @@ public class GLRenderer implements GLSurfaceView.Renderer, WindowManager.OnWindo
             GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
             GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texture.getTextureId());
             windowMaterial.setUniformInt(windowMaterial.uniforms.texture, 0);
-            windowMaterial.setUniformFloat(windowMaterial.uniforms.noAlpha, !transparent ? 1.0f : 0.0f);
+            boolean isOpaque = (texture instanceof GPUImage) || (!transparent);
+            windowMaterial.setUniformFloat(windowMaterial.uniforms.noAlpha, isOpaque ? 1.0f : 0.0f);
             windowMaterial.setUniformFloatArray(windowMaterial.uniforms.xform, tmpXForm1);
             windowMaterial.setUniformBool(windowMaterial.uniforms.flipY, texture.isFlipY());
 
@@ -329,15 +330,18 @@ public class GLRenderer implements GLSurfaceView.Renderer, WindowManager.OnWindo
         if (window != xServer.windowManager.rootWindow && window.attributes.isViewable()) {
             Window parent = window.getParent();
             boolean transparent = window.attributes.isTransparent() || parent.attributes.isTransparent() ||
-                                  parent.isLayered() || window.isLayered() || (parent != xServer.windowManager.rootWindow);
+                                  parent.isLayered() || window.isLayered();
 
             if (forceWindowsFullscreen) {
                 short width = window.getWidth();
                 short height = window.getHeight();
                 FullscreenTransformation fullscreenTransformation = null;
 
-                boolean inBounds = width >= ScreenInfo.MIN_WIDTH && height >= ScreenInfo.MIN_HEIGHT && width < xServer.screenInfo.width && height < xServer.screenInfo.height;
-                if (window.getType() == Window.Type.NORMAL && inBounds && window.hasNoDecorations()) {
+                boolean inBounds = width >= ScreenInfo.MIN_WIDTH && height >= ScreenInfo.MIN_HEIGHT && width <= xServer.screenInfo.width && height <= xServer.screenInfo.height;
+                boolean isGameWindow = (window.getClassName() != null && window.getClassName().contains("gta")) ||
+                                      (window.getName() != null && window.getName().contains("GTA")) ||
+                                      (window.getContent() != null && window.getContent().getTexture() instanceof GPUImage);
+                if (window.getType() == Window.Type.NORMAL && inBounds && (window.hasNoDecorations() || isGameWindow)) {
                     fullscreenTransformation = window.getFullscreenTransformation();
                     if (fullscreenTransformation == null) window.setFullscreenTransformation(fullscreenTransformation = new FullscreenTransformation(window));
                     fullscreenTransformation.update(xServer.screenInfo, window.getWidth(), window.getHeight());
