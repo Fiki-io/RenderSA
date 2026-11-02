@@ -65,6 +65,11 @@ object UniversalCrashLogger {
     private val processOutputLines = CopyOnWriteArrayList<String>()
     private val fileLock = Any()
 
+    @Volatile
+    private var lastRawOutputLine: String? = null
+    @Volatile
+    private var repeatedOutputCount: Int = 0
+
     private val _activeCrashReport = MutableStateFlow<CrashReportData?>(null)
     val activeCrashReport: StateFlow<CrashReportData?> = _activeCrashReport.asStateFlow()
 
@@ -198,12 +203,44 @@ object UniversalCrashLogger {
     fun logProcessOutput(source: String, rawLine: String) {
         val trimmed = rawLine.trimEnd()
         if (trimmed.isEmpty()) return
-        val line = "[${nowFormatted()}] [$source] $trimmed"
+
+        // 1. Abaikan noise log yang tidak berguna / warning palsu
+        if (trimmed.startsWith("[BOX64] Warning, function") && trimmed.contains("not found in lib")) return
+        if (trimmed.contains("sigaction handler for sig 17") || trimmed.contains("Signal 17: si_addr")) return
+        if (trimmed.contains(":trace:loaddll:") && (trimmed.contains(".acm") || trimmed.contains("acm"))) return
+
+        // 2. Anti-looping / deduplikasi baris berturut-turut yang identik
+        synchronized(fileLock) {
+            if (trimmed == lastRawOutputLine) {
+                repeatedOutputCount++
+                if (repeatedOutputCount % 50 == 0) {
+                    appendProcessOutputLine(source, "$trimmed (berulang $repeatedOutputCount kali)")
+                }
+                return
+            } else {
+                if (repeatedOutputCount > 1 && lastRawOutputLine != null) {
+                    val prev = lastRawOutputLine.orEmpty()
+                    val count = repeatedOutputCount
+                    repeatedOutputCount = 1
+                    lastRawOutputLine = trimmed
+                    appendProcessOutputLine(source, "[Pesan sebelumnya '$prev' berulang $count kali]")
+                } else {
+                    repeatedOutputCount = 1
+                    lastRawOutputLine = trimmed
+                }
+            }
+        }
+
+        appendProcessOutputLine(source, trimmed)
+    }
+
+    private fun appendProcessOutputLine(source: String, text: String) {
+        val line = "[${nowFormatted()}] [$source] $text"
         processOutputLines.add(line)
         while (processOutputLines.size > MAX_PROCESS_OUTPUT_LINES) {
             processOutputLines.removeAt(0)
         }
-        Log.d(TAG, "[$source] $trimmed")
+        Log.d(TAG, "[$source] $text")
 
         val ctx = appContext ?: return
         synchronized(fileLock) {
@@ -764,27 +801,49 @@ object UniversalCrashLogger {
             appendLine("--- Pemeriksaan Direktori & Biner Inti RootFS ---")
             appendLine("RootFS Dir     : ${rootDir.absolutePath} (Ada: ${rootDir.isDirectory})")
 
-            val keyPaths = listOf(
-                File("/data/data/${context.packageName}/l"),
-                File("/data/data/${context.packageName}/v"),
-                File("/data/data/${context.packageName}/x"),
-                File(rootDir, "usr/local/bin/box64"),
-                File(rootDir, "usr/bin/box64"),
-                File(rootDir, "opt/wine/bin/wine"),
-                File(rootDir, "opt/wine/bin/wine64"),
-                File(rootDir, "opt/wine/bin/wineserver"),
-                File(rootDir, "usr/lib/ld-linux-aarch64.so.1"),
-                File(rootDir, "lib/ld-linux-aarch64.so.1"),
-                File("/system/bin/linker64"),
-                File("/system/bin/sh"),
-                File(rootDir, "usr/share/vulkan/icd.d/vortek_icd.aarch64.json"),
-                File(rootDir, "usr/share/vulkan/icd.d/freedreno_icd.aarch64.json"),
-                File(rootDir, "home/xuser/.wine/system.reg"),
-                File(rootDir, "home/xuser/.wine/dosdevices/d:"),
-                File(rootDir, "home/xuser/.wine/drive_c/windows/winhandler.exe"),
-                File(rootDir, "home/xuser/.wine/drive_c/windows/system32/d3d9.dll"),
-                File(rootDir, "home/xuser/.wine/drive_c/windows/syswow64/d3d9.dll")
-            )
+            val keyPaths = mutableListOf<File>()
+
+            // Dynamic Linker
+            val ldUsr = File(rootDir, "usr/lib/ld-linux-aarch64.so.1")
+            val ldLib = File(rootDir, "lib/ld-linux-aarch64.so.1")
+            keyPaths.add(if (ldUsr.exists()) ldUsr else ldLib)
+
+            // Emulator Box64
+            val box64Local = File(rootDir, "usr/local/bin/box64")
+            val box64Usr = File(rootDir, "usr/bin/box64")
+            keyPaths.add(if (box64Local.exists()) box64Local else box64Usr)
+
+            // Biner Wine
+            val wineBin = File(rootDir, "opt/wine/bin/wine")
+            val wine64Bin = File(rootDir, "opt/wine/bin/wine64")
+            if (wineBin.exists()) keyPaths.add(wineBin)
+            if (wine64Bin.exists()) keyPaths.add(wine64Bin)
+            keyPaths.add(File(rootDir, "opt/wine/bin/wineserver"))
+
+            // Linker & Shell Android
+            keyPaths.add(File("/system/bin/linker64"))
+            keyPaths.add(File("/system/bin/sh"))
+
+            // Driver Vulkan Aktif
+            val turnipLib = File(rootDir, "usr/lib/libvulkan_freedreno.so")
+            if (turnipLib.exists()) keyPaths.add(turnipLib)
+            val vortekLib = File(rootDir, "usr/lib/libvulkan_vortek.so")
+            if (vortekLib.exists()) keyPaths.add(vortekLib)
+
+            // Vulkan ICD JSON Aktif
+            val turnipIcd = File(rootDir, "usr/share/vulkan/icd.d/freedreno_icd.aarch64.json")
+            if (turnipIcd.exists()) keyPaths.add(turnipIcd)
+            val vortekIcd = File(rootDir, "usr/share/vulkan/icd.d/vortek_icd.aarch64.json")
+            if (vortekIcd.exists()) keyPaths.add(vortekIcd)
+
+            // Prefix Wine & Game Target
+            keyPaths.add(File(rootDir, "home/xuser/.wine/system.reg"))
+            keyPaths.add(File(rootDir, "home/xuser/.wine/dosdevices/d:"))
+            keyPaths.add(File(rootDir, "home/xuser/.wine/drive_c/windows/winhandler.exe"))
+            val d3d9Sys32 = File(rootDir, "home/xuser/.wine/drive_c/windows/system32/d3d9.dll")
+            if (d3d9Sys32.exists()) keyPaths.add(d3d9Sys32)
+            val d3d9SysWow64 = File(rootDir, "home/xuser/.wine/drive_c/windows/syswow64/d3d9.dll")
+            if (d3d9SysWow64.exists()) keyPaths.add(d3d9SysWow64)
 
             for (target in keyPaths) {
                 if (nativeLibraryLoaded) {

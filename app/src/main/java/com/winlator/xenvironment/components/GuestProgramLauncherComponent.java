@@ -151,7 +151,7 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
         envVars.put("FONTCONFIG_FILE", rootDir + "/etc/fonts/fonts.conf");
         envVars.put("XKB_CONFIG_ROOT", rootDir + "/usr/share/X11/xkb");
         envVars.put("XLOCALEDIR", rootDir + "/usr/share/X11/locale");
-        envVars.put("WINEDEBUG", "+err,+warn,+loaddll,+process");
+        envVars.put("WINEDEBUG", "-all,err+all");
         envVars.put("WINEESYNC", "1");
         envVars.put("WINESERVER", rootDir + rootFS.getWinePath() + "/bin/wineserver");
 
@@ -233,12 +233,14 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
         File dynacacheDir = new File(rootFS.getRootDir(), "/tmp/box64_cache");
         if (!dynacacheDir.isDirectory()) dynacacheDir.mkdirs();
 
-        envVars.put("BOX64_NOBANNER", "0");
-        envVars.put("BOX64_LOG", "1");
+        envVars.put("BOX64_NOBANNER", "1");
+        envVars.put("BOX64_LOG", "0");
         envVars.put("BOX64_DYNAREC", "1");
         envVars.put("BOX64_UNITYPLAYER", "0");
         envVars.put("BOX64_DYNACACHE", "1");
         envVars.put("BOX64_DYNACACHE_FOLDER", dynacacheDir.getAbsolutePath());
+        envVars.put("BOX64_SHOWSEGV", "1");
+        envVars.put("BOX64_SHOWBT", "1");
 
         envVars.putAll(Box64PresetManager.getEnvVars(context, box64Preset));
 

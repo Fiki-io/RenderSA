@@ -236,25 +236,41 @@ object RootFsPathRelocator {
         if (!icdDir.isDirectory) return 0
 
         val vortekJson = File(icdDir, "vortek_icd.aarch64.json")
-        if (vortekJson.isFile) {
-            val vortekLib = listOf(
-                File(rootDir, "usr/lib/libvulkan_vortek.so"),
-                File(rootDir, "lib/libvulkan_vortek.so")
-            ).firstOrNull { it.exists() } ?: File(rootDir, "usr/lib/libvulkan_vortek.so")
-            if (writeVulkanIcdJson(vortekJson, vortekLib.absolutePath, "1.1.128")) {
+        val vortekDisabled = File(icdDir, "vortek_icd.aarch64.json.disabled")
+        val vortekLib = listOf(
+            File(rootDir, "usr/lib/libvulkan_vortek.so"),
+            File(rootDir, "lib/libvulkan_vortek.so")
+        ).firstOrNull { it.exists() }
+
+        if (vortekLib != null && vortekLib.exists()) {
+            val targetJson = if (vortekJson.isFile) vortekJson else if (vortekDisabled.isFile) {
+                vortekDisabled.renameTo(vortekJson)
+                vortekJson
+            } else vortekJson
+            if (writeVulkanIcdJson(targetJson, vortekLib.absolutePath, "1.1.128")) {
                 count++
             }
+        } else if (vortekJson.isFile) {
+            vortekJson.renameTo(vortekDisabled)
         }
 
         val turnipJson = File(icdDir, "freedreno_icd.aarch64.json")
-        if (turnipJson.isFile) {
-            val turnipLib = listOf(
-                File(rootDir, "usr/lib/libvulkan_freedreno.so"),
-                File(rootDir, "lib/libvulkan_freedreno.so")
-            ).firstOrNull { it.exists() } ?: File(rootDir, "usr/lib/libvulkan_freedreno.so")
-            if (writeVulkanIcdJson(turnipJson, turnipLib.absolutePath, "1.3.296")) {
+        val turnipDisabled = File(icdDir, "freedreno_icd.aarch64.json.disabled")
+        val turnipLib = listOf(
+            File(rootDir, "usr/lib/libvulkan_freedreno.so"),
+            File(rootDir, "lib/libvulkan_freedreno.so")
+        ).firstOrNull { it.exists() }
+
+        if (turnipLib != null && turnipLib.exists()) {
+            val targetJson = if (turnipJson.isFile) turnipJson else if (turnipDisabled.isFile) {
+                turnipDisabled.renameTo(turnipJson)
+                turnipJson
+            } else turnipJson
+            if (writeVulkanIcdJson(targetJson, turnipLib.absolutePath, "1.3.296")) {
                 count++
             }
+        } else if (turnipJson.isFile) {
+            turnipJson.renameTo(turnipDisabled)
         }
 
         return count

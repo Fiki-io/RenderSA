@@ -788,7 +788,7 @@ object RuntimeEnvironmentManager {
         dxvkCacheDir.mkdirs()
 
         envVars.put("WINEESYNC", "1")
-        envVars.put("WINEDEBUG", "+err,+warn,+loaddll")
+        envVars.put("WINEDEBUG", "-all,err+all")
         envVars.put("WINEARCH", "win64")
         envVars.put("WINEDLLOVERRIDES", "d3d9,dxgi,dsound,dinput8=n,b;winemenubuilder.exe=d;mscoree,mshtml=d")
 
@@ -796,8 +796,8 @@ object RuntimeEnvironmentManager {
         envVars.put("BOX64_DYNACACHE", "1")
         envVars.put("BOX64_DYNACACHE_FOLDER", dynCacheDir.absolutePath)
         envVars.put("BOX64_DYNACACHE_MIN", "128")
-        envVars.put("BOX64_LOG", "1")
-        envVars.put("BOX64_NOBANNER", "0")
+        envVars.put("BOX64_LOG", "0")
+        envVars.put("BOX64_NOBANNER", "1")
         envVars.put("BOX64_SHOWSEGV", "1")
         envVars.put("BOX64_SHOWBT", "1")
 
@@ -809,7 +809,7 @@ object RuntimeEnvironmentManager {
         envVars.put("MESA_GLES_VERSION_OVERRIDE", "3.2")
 
         envVars.put("DXVK_HUD", "0")
-        envVars.put("DXVK_LOG_LEVEL", "info")
+        envVars.put("DXVK_LOG_LEVEL", "warn")
         envVars.put("DXVK_STATE_CACHE", "1")
         envVars.put("DXVK_STATE_CACHE_PATH", dxvkCacheDir.absolutePath)
         if (dxvkVersion.startsWith("1.")) {
